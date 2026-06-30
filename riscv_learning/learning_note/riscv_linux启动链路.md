@@ -240,6 +240,104 @@ blt t1, s7, _scratch_init
 - 为每个 HART 提供独立、可访问的运行时 scratch 区
 - 后续每个 HART 可以通过 scratch 区找到自己的状态、参数、堆信息
 
+
+
+```c
+/** Representation of per-HART scratch space */
+struct sbi_scratch {
+	/** Start (or base) address of firmware linked to OpenSBI library */
+	unsigned long fw_start;
+	/** Size (in bytes) of firmware linked to OpenSBI library */
+	unsigned long fw_size;
+	/** Offset (in bytes) of the R/W section */
+	unsigned long fw_rw_offset;
+	/** Offset (in bytes) of the heap area */
+	unsigned long fw_heap_offset;
+	/** Size (in bytes) of the heap area */
+	unsigned long fw_heap_size;
+	/** Arg1 (or 'a1' register) of next booting stage for this HART */
+	unsigned long next_arg1;
+	/** Address of next booting stage for this HART */
+	unsigned long next_addr;
+	/** Privilege mode of next booting stage for this HART */
+	unsigned long next_mode;
+	/** Warm boot entry point address for this HART */
+	unsigned long warmboot_addr;
+	/** Address of sbi_platform */
+	unsigned long platform_addr;
+	/** Address of HART ID to sbi_scratch conversion function */
+	unsigned long hartid_to_scratch;
+	/** Address of current trap context */
+	unsigned long trap_context;
+	/** Temporary storage */
+	unsigned long tmp0;
+	/** Options for OpenSBI library */
+	unsigned long options;
+	/** Index of the hart */
+	unsigned long hartindex;
+};
+```
+
+scratch->next_arg1: 一般为设备树地址, 若没有设备树,则为0
+
+scratch->next_addr: 一般为kernel地址. 这个地址在opensbi中会赋值给`csr_write(CSR_MEPC, next_addr);`从而在执行mret的时候,可以跳转至MEPC保存的地址中
+```
+内存地址         内容
+──────────────────────────────────────
+0x80000000       ┌─────────────────┐ ← _fw_start
+                 │   OpenSBI       │
+                 │                 │
+0x80200000       ├─────────────────┤ ← _fw_start + FW_JUMP_OFFSET
+                 │   Kernel        │   这就是kernel入口地址
+                 │  (next_addr)    │   
+                 └─────────────────┘
+```
+scratch->next_mode: 执行mret后的特权模式
+
+```c
+void __attribute__((noreturn))
+sbi_hart_switch_mode(unsigned long arg0, unsigned long arg1,
+             unsigned long next_addr, unsigned long next_mode,
+             bool next_virt)
+{
+    // ... 检查特权模式是否支持 ...
+    
+    // ① next_addr 写入 CSR_MEPC
+    csr_write(CSR_MEPC, next_addr);
+    
+    // ② 设置 next_mode 到 MSTATUS_MPP
+    val = csr_read(CSR_MSTATUS);
+    val = INSERT_FIELD(val, MSTATUS_MPP, next_mode);
+    csr_write(CSR_MSTATUS, val);
+    
+    // ③ 将参数放入寄存器
+    register unsigned long a0 asm("a0") = arg0;      // hartid
+    register unsigned long a1 asm("a1") = arg1;      // next_arg1
+    
+    // ④ 执行 mret 跳转
+    __asm__ __volatile__("mret" : : "r"(a0), "r"(a1));
+}
+```
+
+
+
+```
+OpenSBI M-mode
+    ↓
+[scratch->next_arg1]  →  a1 寄存器  (设备树地址或参数)
+[scratch->next_addr]  →  MEPC CSR   (kernel入口地址)
+[scratch->next_mode]  →  MSTATUS_MPP (S-mode)
+[hartid]              →  a0 寄存器  (hartid)
+    ↓
+执行 mret 指令
+    ↓
+从 MEPC 跳转到 kernel
+在 PRV_S 权限模式下执行
+a0 = hartid, a1 = 设备树地址
+```
+
+
+
 ---
 
 ### 13. 迁移设备树（FDT）
@@ -409,3 +507,4 @@ call sbi_init
 - 等待引导 HART 完成，统一进入 `sbi_init`
 
 换句话说：这部分代码完成的是“启动阶段的环境准备”，它不是 SBI 的核心服务，而是让 `sbi_init` 能在一个干净、正确的运行时上下文里开始工作。
+
