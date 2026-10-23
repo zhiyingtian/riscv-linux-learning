@@ -76,7 +76,7 @@ SPARSEMEM 稀疏内存模型.png
 
 内核中提供了一个 alloc_pages 函数用于分配 2 的 order 次幂个物理内存页，参数中的 unsigned int order 表示向底层伙伴系统指定的分配阶，参数 gfp_t gfp 是内核中定义的一个用于规范物理内存分配行为的修饰符，这里我们先不展开，后面的小节中笔者会详细为大家介绍。
 
-```text
+```c
 struct page *alloc_pages(gfp_t gfp, unsigned int order);
 ```
 
@@ -84,7 +84,7 @@ alloc_pages 函数用于向底层伙伴系统申请 2 的 order 次幂个物理�
 
 alloc_pages 函数用于分配**多个**连续的物理内存页，在内核的某些内存分配场景中有时候并不需要分配这么多的连续内存页，而是只需要分配一个物理内存页即可，于是内核又提供了 alloc_page 宏，用于这种**单内存页**分配的场景，我们可以看到其底层还是依赖了 alloc_pages 函数，只不过 order 指定为 0。
 
-```text
+```c
 #define alloc_page(gfp_mask) alloc_pages(gfp_mask, 0)
 ```
 
@@ -96,7 +96,7 @@ alloc_pages 函数用于分配**多个**连续的物理内存页，在内核的�
 
 大家可以直接理解成返回的是一块物理内存，而 CPU 可以直接访问的却是虚拟内存，所以内核又提供了一个函数 __get_free_pages ，该函数直接返回物理内存页的虚拟内存地址。用户可以直接使用。
 
-```text
+```c
 unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order);
 ```
 
@@ -104,7 +104,7 @@ __get_free_pages 函数在使用方式上和 alloc_pages 是一样的，函数�
 
 事实上 __get_free_pages 函数的底层也是基于 alloc_pages 实现的，只不过多了一层虚拟地址转换的工作。
 
-```text
+```c
 unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order)
 {
  struct page *page;
@@ -129,7 +129,7 @@ page_address 函数用于将给定的物理内存页 page 转换为它的虚拟�
 
 同 alloc_page 函数一样，内核也提供了 __get_free_page 用于只分配单个物理内存页的场景，底层还是依赖于 __get_free_pages 函数，参数 order 指定为 0 。
 
-```text
+```c
 #define __get_free_page(gfp_mask) \
   __get_free_pages((gfp_mask), 0)
 ```
@@ -138,7 +138,7 @@ page_address 函数用于将给定的物理内存页 page 转换为它的虚拟�
 
 这些敏感的信息可能会被一些黑客所利用，并对计算机系统产生一些危害行为，所以从使用安全的角度考虑，内核又提供了一个函数 get_zeroed_page，顾名思义，这个函数会将从伙伴系统中申请到内存页全部初始化填充为 0 ，这在分配物理内存页给用户空间使用的时候非常有用。
 
-```text
+```c
 unsigned long get_zeroed_page(gfp_t gfp_mask)
 {
  return __get_free_pages(gfp_mask | __GFP_ZERO, 0);
@@ -149,7 +149,7 @@ get_zeroed_page 函数底层也依赖于 __get_free_pages，指定的分配阶 o
 
 除此之外，内核还提供了一个 __get_dma_pages 函数，专门用于从 DMA 内存区域分配适用于 DMA 的物理内存页。其底层也是依赖于 __get_free_pages 函数。
 
-```text
+```c
 unsigned long __get_dma_pages(gfp_t gfp_mask, unsigned int order);
 ```
 
@@ -159,7 +159,7 @@ unsigned long __get_dma_pages(gfp_t gfp_mask, unsigned int order);
 
 当然了，有内存的分配就会有内存的释放，所以内核还提供了两个用于释放物理内存页的函数：
 
-```text
+```c
 void __free_pages(struct page *page, unsigned int order);
 void free_pages(unsigned long addr, unsigned int order);
 ```
@@ -171,7 +171,7 @@ void free_pages(unsigned long addr, unsigned int order);
 
 另外内核也提供了 __free_page 和 free_page 两个宏，专门用于释放单个物理内存页。
 
-```text
+```c
 #define __free_page(page) __free_pages((page), 0)
 #define free_page(addr) free_pages((addr), 0)
 ```
@@ -194,7 +194,7 @@ void free_pages(unsigned long addr, unsigned int order);
 
 当我们调用上小节中介绍的那几个物理内存分配接口时，比如：alloc_pages 和 __get_free_pages。就会遇到一个问题，就是我们申请的这些物理内存到底来自于哪个物理内存区域 zone，假如我们想要从指定的物理内存区域中申请内存，我们该如何告诉内核呢 ?
 
-```text
+```c
 struct page *alloc_pages(gfp_t gfp, unsigned int order);
 unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order);
 ```
@@ -209,7 +209,7 @@ gfp_mask 中的低 4 位用来表示应该从哪个物理内存区域 zone 中�
 
 gfp_mask 掩码中这些区域修饰符 zone modifiers 定义在内核 `/include/linux/gfp.h` 文件中：
 
-```text
+```c
 #define ___GFP_DMA      0x01u
 #define ___GFP_HIGHMEM  0x02u
 #define ___GFP_DMA32    0x04u
@@ -224,7 +224,7 @@ gfp_mask 掩码中这些区域修饰符 zone modifiers 定义在内核 `/include
 
 内核在 `/include/linux/gfp.h` 文件中定义了一个叫做 gfp_zone 的函数，这个函数用于将我们在物理内存分配接口中指定的 gfp_mask 掩码转换为物理内存区域，返回的这个物理内存区域是内存分配的最高级内存区域，如果这个最高级内存区域不足以满足内存分配的需求，则按照 `ZONE_HIGHMEM -> ZONE_NORMAL -> ZONE_DMA` 的顺序依次降级。
 
-```text
+```c
 static inline enum zone_type gfp_zone(gfp_t flags)
 {
  enum zone_type z;
@@ -241,7 +241,7 @@ static inline enum zone_type gfp_zone(gfp_t flags)
 
 笔者写到这里觉得给大家分析清楚每一步移位操作的实现对大家理解这个函数的主干逻辑并没有什么实质意义上的帮助，并且和本文主题偏离太远，所以我们退回到低版本 2.6.24 中的实现，在这一版中直击 gfp_zone 函数原本的面貌。
 
-```text
+```c
 static inline enum zone_type gfp_zone(gfp_t flags)
 {
  int base = 0;
@@ -297,7 +297,7 @@ ZONE_MOVABLE 只是内核定义的一个虚拟内存区域，目的是避免内�
 
 这些内存分配行为修饰符同样也是定义在 `/include/linux/gfp.h` 文件中：
 
-```text
+```c
 #define ___GFP_RECLAIMABLE 0x10u
 #define ___GFP_HIGH  0x20u
 #define ___GFP_IO  0x40u
@@ -344,7 +344,7 @@ ZONE_MOVABLE 只是内核定义的一个虚拟内存区域，目的是避免内�
 
 于是内核将各种标准情形下用到的 gfp_t 掩码组合，提前为大家定义了一些标准的分组，方便大家直接使用。
 
-```text
+```c
 #define GFP_ATOMIC (__GFP_HIGH|__GFP_ATOMIC|__GFP_KSWAPD_RECLAIM)
 #define GFP_KERNEL (__GFP_RECLAIM | __GFP_IO | __GFP_FS)
 #define GFP_NOWAIT (__GFP_KSWAPD_RECLAIM)
@@ -367,7 +367,7 @@ ZONE_MOVABLE 只是内核定义的一个虚拟内存区域，目的是避免内�
 
 这时我们在回过头来看内核中关于物理内存分配的这些接口函数是不是感觉了如指掌了：
 
-```text
+```c
 struct page *alloc_pages(gfp_t gfp, unsigned int order)
 unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order)
 unsigned long get_zeroed_page(gfp_t gfp_mask)
@@ -390,7 +390,7 @@ unsigned long __get_dma_pages(gfp_t gfp_mask, unsigned int order)
 
 > __alloc_pages 函数为 Linux 内核内存分配的核心入口函数
 
-```text
+```c
 static inline struct page *alloc_pages(gfp_t gfp_mask, unsigned int order)
 {
  return alloc_pages_node(numa_node_id(), gfp_mask, order);
@@ -414,7 +414,7 @@ __alloc_pages_node 函数参数中的 nid 就是我们在上篇文章** 《深�
 
 内核使用了一个大小为 MAX_NUMNODES 的全局数组 node_data[] 来管理所有的 NUMA 节点，数组的下标即为 NUMA 节点 Id 。
 
-```text
+```c
 #ifdef CONFIG_NUMA
 extern struct pglist_data *node_data[];
 #define NODE_DATA(nid)  (node_data[(nid)])
@@ -432,7 +432,7 @@ extern struct pglist_data *node_data[];
 
 在我们进入 __alloc_pages 函数之前，笔者先来为大家介绍几个影响内核分配内存行为的标识，这些重要标识定义在内核文件 `/mm/internal.h` 中：
 
-```text
+```c
 #define ALLOC_WMARK_MIN     WMARK_MIN
 #define ALLOC_WMARK_LOW     WMARK_LOW
 #define ALLOC_WMARK_HIGH    WMARK_HIGH
@@ -453,7 +453,7 @@ extern struct pglist_data *node_data[];
 
 这三个水位线定义在 `/include/linux/mmzone.h` 文件中：
 
-```text
+```c
 enum zone_watermarks {
  WMARK_MIN,
  WMARK_LOW,
@@ -464,7 +464,7 @@ enum zone_watermarks {
 
 三条水位线对应的 watermark 具体数值存储在每个物理内存区域 struct zone 结构中的 _watermark[NR_WMARK] 数组中。
 
-```text
+```c
 struct zone {
     // 物理内存区域中的水位线
     unsigned long _watermark[NR_WMARK];
@@ -505,7 +505,7 @@ ALLOC_KSWAPD 表示允许唤醒 NUMA 节点中的 KSWAPD 进程，异步进行�
 
 内核会为每个 NUMA 节点分配一个 kswapd 进程用于回收不经常使用的页面。
 
-```text
+```c
 typedef struct pglist_data {
         .........
     // 页面回收进程
@@ -520,7 +520,7 @@ typedef struct pglist_data {
 
 > 该函数的逻辑比较复杂，因为在内存分配过程中需要涉及处理各种 `GFP_*`，`ALLOC_*` 标识，然后根据上述各种标识的含义来决定内存分配该如何进行。所以大家需要多点耐心，一步一步跟着笔者的思路往下走~~~
 
-```text
+```c
 /*
  * This is the 'heart' of the zoned buddy allocator.
  */
@@ -586,7 +586,7 @@ __alloc_pages 函数中的内存分配整体逻辑如下：
 
 - 校验本次内存分配指定伙伴系统的分配阶 order 的有效性，伙伴系统在内核中的最大分配阶定义在 `/include/linux/mmzone.h` 文件中，最大分配阶 MAX_ORDER -1 = 10，也就是说一次最多只能从伙伴系统中申请 1024 个内存页，对应 4M 大小的连续物理内存。
 
-```text
+```c
 /* Free memory management - zoned buddy allocator.  */
 #ifndef CONFIG_FORCE_MAX_ZONEORDER
 #define MAX_ORDER 11
@@ -594,7 +594,7 @@ __alloc_pages 函数中的内存分配整体逻辑如下：
 
 - 调用 prepare_alloc_pages 初始化 alloc_context ，用于在不同内存分配辅助函数中传递内存分配参数。为接下来即将进行的快速内存分配做准备。
 
-```text
+```c
 struct alloc_context {
     // 运行进程 CPU 所在 NUMA  节点以及其所有备用 NUMA 节点中允许内存分配的内存区域
     struct zonelist *zonelist;
@@ -632,7 +632,7 @@ struct alloc_context {
 
 prepare_alloc_pages 初始化 alloc_context ，用于在不同内存分配辅助函数中传递内存分配参数，为接下来即将进行的快速内存分配做准备。
 
-```text
+```c
 static inline bool prepare_alloc_pages(gfp_t gfp_mask, unsigned int order,
         int preferred_nid, nodemask_t *nodemask,
         struct alloc_context *ac, gfp_t *alloc_gfp,
@@ -676,7 +676,7 @@ prepare_alloc_pages 主要的任务就是在快速内存分配开始之前，做
 
 struct pglist_data 结构中不仅包含了本 NUMA 节点中的所有内存区域，还包括了其他备用 NUMA 节点中的物理内存区域，当本节点中内存不足的情况下，内核会从备用 NUMA 节点中的内存区域进行跨节点内存分配。
 
-```text
+```c
 typedef struct pglist_data {
     // NUMA 节点中的物理内存区域个数
     int nr_zones; 
@@ -689,7 +689,7 @@ typedef struct pglist_data {
 
 我们可以根据 nid 和 gfp_mask 掩码中的物理内存区域描述符利用 node_zonelist 函数一次性获取允许进行内存分配的所有内存区域（所有 NUMA 节点）。
 
-```text
+```c
 static inline struct zonelist *node_zonelist(int nid, gfp_t flags)
 {
  return NODE_DATA(nid)->node_zonelists + gfp_zonelist(flags);
@@ -706,7 +706,7 @@ alloc_pages_slowpath 函数包含了整个内存分配的核心流程，本身�
 
 > 还是那句话，这里大家只需要总体把握，不需要掌握每个细节，关于细节的部分，笔者后面会带大家逐个击破！！！
 
-```text
+```c
 static inline struct page *
 __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
                         struct alloc_context *ac)
@@ -747,7 +747,7 @@ got_pg:
 
 ### **4.1 初始化内存分配慢速路径下的相关参数**
 
-```text
+```c
 static inline struct page *
 __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
                         struct alloc_context *ac)
@@ -799,13 +799,13 @@ got_pg:
 
 这个临界值就是 PAGE_ALLOC_COSTLY_ORDER 定义在 `/include/linux/mmzone.h` 文件中：
 
-```text
+```c
 #define PAGE_ALLOC_COSTLY_ORDER 3
 ```
 
 也就是说在内核看来，当请求内存页的数量大于 2 ^ 3 = 8 个内存页时，costly_order = true，内核就认为本次内存分配是一次成本比较大的行为。后续会根据这个参数 costly_order 来决定是否触发 OOM 。
 
-```text
+```c
     const bool costly_order = order > PAGE_ALLOC_COSTLY_ORDER;
 ```
 
@@ -815,7 +815,7 @@ no_progress_loops 用于记录内存分配重试的次数，如果内存分配�
 
 MAX_RECLAIM_RETRIES 定义在 `/mm/internal.h` 文件中：
 
-```text
+```c
 #define MAX_RECLAIM_RETRIES 16
 ```
 
@@ -847,7 +847,7 @@ compact_* 相关的参数用于直接内存整理 direct_compact，内核通常�
 
 在介绍完了内存分配在慢速路径下所需要的相关参数之后，下面就正式来到了 alloc_pages_slowpath 的内存分配逻辑：
 
-```text
+```c
 static inline struct page *
 __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
                         struct alloc_context *ac)
@@ -929,7 +929,7 @@ got_pg:
 
 而内存分配策略相关的调整逻辑，内核定义在 gfp_to_alloc_flags 函数中：
 
-```text
+```c
 static inline unsigned int gfp_to_alloc_flags(gfp_t gfp_mask)
 {
     // 在慢速内存分配路径中，会进一步放宽对内存分配的限制，将内存分配水位线调低到 WMARK_MIN
@@ -962,14 +962,14 @@ static inline unsigned int gfp_to_alloc_flags(gfp_t gfp_mask)
 
 在调整好的新的内存分配策略 alloc_flags 之后，就需要根据新的策略来重新获取可供分配的内存区域 zone。
 
-```text
+```c
   ac->preferred_zoneref = first_zones_zonelist(ac->zonelist,
                     ac->highest_zoneidx, ac->nodemask);
 ```
 
 从上图中我们可以看出，当剩余内存处于 WMARK_MIN 与 WMARK_LOW 之间时，内核会唤醒所有 kswapd 进程来异步回收内存，直到剩余内存重新回到水位线 WMARK_HIGH 之上。
 
-```text
+```c
     if (alloc_flags & ALLOC_KSWAPD)
         wake_all_kswapds(order, gfp_mask, ac);
 ```
@@ -978,7 +978,7 @@ static inline unsigned int gfp_to_alloc_flags(gfp_t gfp_mask)
 
 此时在新的内存分配策略下进行内存分配很可能会一次性成功，所以内核会首先尝试进行一次内存分配。
 
-```text
+```c
 page = get_page_from_freelist(gfp_mask, order, alloc_flags, ac);
 ```
 
@@ -996,7 +996,7 @@ page = get_page_from_freelist(gfp_mask, order, alloc_flags, ac);
 
 所以在接下来的分配逻辑中，内核会近一步采取更加激进的非常手段来获取连续的空闲内存，下面我们来一起看下这部分激进的内容：
 
-```text
+```c
 static inline struct page *
 __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
                         struct alloc_context *ac)
@@ -1109,7 +1109,7 @@ got_pg:
 
 retry 分支包含的是更加激进的内存分配逻辑，所以在一开始需要调用 __gfp_pfmemalloc_flags 函数来重新调整内存分配策略，调整后的策略为：后续内存分配会忽略水位线的影响，并且允许内核从紧急预留内存中获取内存。
 
-```text
+```c
 static inline int __gfp_pfmemalloc_flags(gfp_t gfp_mask)
 {
     // 如果不允许从紧急预留内存中分配，则不改变 alloc_flags
@@ -1140,20 +1140,20 @@ static inline int __gfp_pfmemalloc_flags(gfp_t gfp_mask)
 
 > 注意：此次尝试进行的内存分配会忽略内存水位线：ALLOC_NO_WATERMARKS
 
-```text
+```c
    page = get_page_from_freelist(gfp_mask, order, alloc_flags, ac);
 ```
 
 如果在忽略内存水位线的情况下，内存依然分配失败，则进行直接内存回收 direct_reclaim 。
 
-```text
+```c
    page = __alloc_pages_direct_reclaim(gfp_mask, order, alloc_flags, ac,
                             &did_some_progress);
 ```
 
 经过 direct_reclaim 之后，仍然没有足够的内存可供分配的话，那么内核会再次进行直接内存整理 direct_compact 。
 
-```text
+```c
     page = __alloc_pages_direct_compact(gfp_mask, order, alloc_flags, ac,
                     compact_priority, &compact_result);
 ```
@@ -1166,7 +1166,7 @@ static inline int __gfp_pfmemalloc_flags(gfp_t gfp_mask)
 
 所以当 costly_order = true 时，内核不会触发 OOM，直接跳转到 nopage 分支，除非设置了 __GFP_RETRY_MAYFAIL 内存分配策略：
 
-```text
+```c
     if (costly_order && !(gfp_mask & __GFP_RETRY_MAYFAIL))
         goto nopage;
 ```
@@ -1178,7 +1178,7 @@ static inline int __gfp_pfmemalloc_flags(gfp_t gfp_mask)
 
 如果 should_reclaim_retry = false，后面会进一步判断是否应该进行 direct_compact 的重试。
 
-```text
+```c
     if (did_some_progress > 0 &&
             should_compact_retry(ac, order, alloc_flags,
                 compact_result, &compact_priority,
@@ -1190,7 +1190,7 @@ did_some_progress 表示上次直接内存回收具体回收了多少内存页,�
 
 当这些所有的重试请求都被拒绝时，杀手锏 OOM 就开始登场了：
 
-```text
+```c
    page = __alloc_pages_may_oom(gfp_mask, order, ac, &did_some_progress);
     if (page)
         goto got_pg;
@@ -1212,7 +1212,7 @@ did_some_progress 表示上次直接内存回收具体回收了多少内存页,�
 
 我们在 **《深入理解 Linux 物理内存管理》**一文中的 “ 3.2 非一致性内存访问 NUMA 架构 ” 小节，介绍 NUMA 内存架构的时候曾经提到：当 CPU 自己所在的本地 NUMA 节点内存不足时，CPU 就需要跨 NUMA 节点去访问其他内存节点，**这种跨 NUMA 节点分配内存的行为就发生在这里，这种情况下 CPU 访问内存就会慢很多**。
 
-```text
+```c
 static inline struct page *
 __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
                         struct alloc_context *ac)
@@ -1288,7 +1288,7 @@ got_pg:
 
 
 
-```text
+```c
 static inline struct page *
 __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
                         struct alloc_context *ac)
