@@ -1,0 +1,62 @@
+digraph MM {
+    graph [rankdir=LR, bgcolor="white", fontname="Noto Sans CJK SC", fontsize=11,
+           pad=0.25, nodesep=0.30, ranksep=0.55, compound=true];
+    node [shape=box, style="rounded,filled", fontname="Noto Sans CJK SC",
+          fontsize=10, margin="0.10,0.06", color="#607d8b", fillcolor="#eceff1"];
+    edge [fontname="Noto Sans CJK SC", fontsize=9, color="#455a64", arrowsize=0.7];
+
+    subgraph cluster_addr {
+        label="进程虚拟地址空间（每个进程一份）";
+        fontsize=11; color="#90caf9"; style="rounded,dashed";
+        task [label="task_struct", fillcolor="#e3f2fd"];
+        mm [label="mm_struct\npgd / mmap / mm_rb\nmm_users / mm_count / mmap_lock", fillcolor="#bbdefb"];
+        vma [label="vm_area_struct（VMA）\n[vm_start, vm_end)\nvm_flags / vm_file / vm_pgoff\nanon_vma / vm_ops", fillcolor="#c8e6c9"];
+        vaddr [label="vaddr\n进程虚拟地址", shape=ellipse, fillcolor="#fff9c4"];
+    }
+
+    subgraph cluster_xlate {
+        label="MMU 地址翻译（页表）";
+        fontsize=11; color="#ffcc80"; style="rounded,dashed";
+        pt [label="页表\npgd → p4d → pud → pmd → pte", fillcolor="#ffe0b2"];
+        pte [label="PTE\nPFN + 权限/状态位", fillcolor="#ffcc80"];
+    }
+
+    subgraph cluster_phys {
+        label="物理内存（全局唯一）";
+        fontsize=11; color="#ef9a9a"; style="rounded,dashed";
+        pfn [label="PFN\n物理页帧号", shape=ellipse, fillcolor="#ffcdd2"];
+        page [label="struct page\nflags / _refcount / _mapcount\nmapping / index / private", fillcolor="#ffcdd2"];
+        paddr [label="paddr\n物理地址", shape=ellipse, fillcolor="#ffebee"];
+    }
+
+    subgraph cluster_alloc {
+        label="物理页分配管理";
+        fontsize=11; color="#b39ddb"; style="rounded,dashed";
+        zone [label="zone\nZONE_DMA/DMA32/NORMAL/MOVABLE\nzone_start_pfn / spanned_pages\nfree_area[] / per_cpu_pages", fillcolor="#e1bee7"];
+        pgdat [label="pg_data_t（NUMA node）\nnode_zones[] / node_id\nnode_start_pfn / node_spanned_pages", fillcolor="#d1c4e9"];
+    }
+
+    rmap [label="rmap 反向映射\nanon_vma 区间树 / i_mmap 区间树", fillcolor="#ffcdd2", style="rounded,filled,dashed"];
+
+    task -> mm [label="mm / active_mm"];
+    mm -> pt [label="pgd"];
+    mm -> vma [label="mmap 链表\nmm_rb 红黑树"];
+    vma -> vaddr [label="描述区间"];
+    vaddr -> pt [label="按 vaddr 逐级索引"];
+    pt -> pte [label="最后一级"];
+    pte -> pfn [label="pte_pfn()"];
+    pfn -> page [dir=both, label="page_to_pfn() ⇄ pfn_to_page()"];
+    pfn -> paddr [dir=both, label="PFN_PHYS() ⇄ PHYS_PFN()\n(pfn << PAGE_SHIFT / paddr >> PAGE_SHIFT)"];
+    zone -> pgdat [dir=both, label="zone_pgdat / node_zones[]", style=dashed];
+    pgdat -> zone [style=invis];
+    page -> zone [label="page_zone()\npage_to_nid()"];
+
+    page -> rmap [label="mapping / anon_vma"];
+    rmap -> vma [label="page → 所有映射 VMA", color="#c62828", fontcolor="#c62828"];
+    vma -> page [label="VMA + vaddr\n页表遍历 / page fault", color="#1565c0", fontcolor="#1565c0", style=dashed];
+
+    { rank=same; mm; vma; vaddr; }
+    { rank=same; pt; pte; }
+    { rank=same; pfn; page; paddr; }
+    { rank=same; zone; pgdat; }
+}
