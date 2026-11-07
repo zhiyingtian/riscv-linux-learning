@@ -1,6 +1,6 @@
 # tiny-mm / M0 + M1
 
-这是 [tiny-mm 学习框架](../tiny_mm_learning_framework.md) 的 M0/M1 实验脚手架。
+这是 [tiny-mm 学习框架](tiny_mm_learning_framework.md) 的 M0/M1 实验脚手架。
 
 - **M0**：工具链、`Makefile`、测试 runner、ASan/UBSan；
 - **M1**：物理页模型、`struct page`、PFN/paddr、zone、refcount、double free/错 order 检查。
@@ -193,7 +193,7 @@ all tests passed
 | `zone->zone_pgdat` | `include/linux/mmzone.h:513` |
 | `zone` 范围 | `include/linux/mmzone.h:532` |
 
-概念细节看：[内存管理核心数据结构与地址转换.md](../内存管理核心数据结构与地址转换.md) 的 3.4–3.6、4.5–4.8。
+概念细节看：[内存管理核心数据结构与地址转换.md](../notes/内存管理核心数据结构与地址转换.md) 的 3.4–3.6、4.5–4.8。
 
 ---
 
@@ -206,4 +206,4 @@ M1 全绿后，进入 M2：
 - 实现 split/merge、pcp、watermark、migratetype；
 - 把 M1 的 `order unsupported` 测试改成 buddy 的 order 测试。
 
-框架见：[tiny_mm_learning_framework.md](../tiny_mm_learning_framework.md)。
+框架见：[tiny_mm_learning_framework.md](tiny_mm_learning_framework.md)。

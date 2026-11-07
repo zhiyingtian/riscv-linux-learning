@@ -1,0 +1,14 @@
+# 内核模块构建产物
+**/*.ko
+**/*.o
+**/*.mod
+**/*.mod.c
+**/.*.cmd
+**/modules.order
+**/Module.symvers
+
+# 本地编译出的测试二进制
+cow/cow
+learn_page_alloc/trigger_alloc
+learn_page_alloc/trigger_alloc_riscv64
+learn_mmap/private_anonymous/mmap_lazy_demo

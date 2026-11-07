@@ -69,7 +69,7 @@ might_sleep_if(gfp_mask & __GFP_DIRECT_RECLAIM);
 
 ### 2.1 `GFP_KERNEL` 为什么“可能睡”
 
-[`include/linux/gfp.h:324`](../../../../../../runninglinuxkernel_5.15/include/linux/gfp.h#L324)：
+[`include/linux/gfp.h:324`](../../../../../../../runninglinuxkernel_5.15/include/linux/gfp.h#L324)：
 
 ```c
 #define GFP_KERNEL (__GFP_RECLAIM | __GFP_IO | __GFP_FS)
@@ -83,7 +83,7 @@ might_sleep_if(gfp_mask & __GFP_DIRECT_RECLAIM);
 
 `__GFP_DIRECT_RECLAIM` 的意思是：**允许调用者自己进入直接回收**。直接回收会扫描 LRU、等页锁、做写回，必要时 `cond_resched()`，所以可能睡眠。
 
-[`include/linux/gfp.h:323`](../../../../../../runninglinuxkernel_5.15/include/linux/gfp.h#L323)：
+[`include/linux/gfp.h:323`](../../../../../../../runninglinuxkernel_5.15/include/linux/gfp.h#L323)：
 
 ```c
 #define GFP_ATOMIC (__GFP_HIGH | __GFP_ATOMIC | __GFP_KSWAPD_RECLAIM)
@@ -98,7 +98,7 @@ might_sleep_if(gfp_mask & __GFP_DIRECT_RECLAIM);
 ### 3.1 host 编译并同步到 9p
 
 ```bash
-cd linux_learning/kernel_learning_map/memory/learn_page_alloc/gfp_context_bug_lab
+cd linux_learning/kernel_learning_map/memory/labs/learn_page_alloc/gfp_context_bug_lab
 make install
 ```
 

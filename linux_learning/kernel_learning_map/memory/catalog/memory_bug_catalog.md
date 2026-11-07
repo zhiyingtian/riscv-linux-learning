@@ -17,11 +17,11 @@
 
 已有实验：
 
-- [buddy_bug_lab](learn_page_alloc/buddy_bug_lab/)：物理页 double free
-- [gfp_context_bug_lab](learn_page_alloc/gfp_context_bug_lab/)：GFP/原子上下文 bug
-- [page_refcount_bug_lab](learn_page_alloc/page_refcount_bug_lab/)：页引用计数泄漏/多余 put_page（🧪）
-- [slab_uaf_bug_lab](learn_page_alloc/slab_uaf_bug_lab/)：slab UAF/double free/越界写（🧪）
-- [patch_exercise_01_vma_merge_uaf.md](patch_exercise_01_vma_merge_uaf.md)：VMA merge UAF 真实补丁练习（✅ 文档）
+- [buddy_bug_lab](../labs/learn_page_alloc/buddy_bug_lab/)：物理页 double free
+- [gfp_context_bug_lab](../labs/learn_page_alloc/gfp_context_bug_lab/)：GFP/原子上下文 bug
+- [page_refcount_bug_lab](../labs/learn_page_alloc/page_refcount_bug_lab/)：页引用计数泄漏/多余 put_page（🧪）
+- [slab_uaf_bug_lab](../labs/learn_page_alloc/slab_uaf_bug_lab/)：slab UAF/double free/越界写（🧪）
+- [patch_exercise_01_vma_merge_uaf.md](../exercises/patch_exercise_01_vma_merge_uaf.md)：VMA merge UAF 真实补丁练习（✅ 文档）
 
 ---
 
@@ -29,21 +29,21 @@
 
 | # | Bug | 典型机制 | 现象 | 调试/检测 | Demo |
 |---|---|---|---|---|---|
-| P01 | double free | 同一个页 `__free_pages()` 两次 | pcp/buddy 损坏、bad page、后续分配崩溃 | `CONFIG_DEBUG_VM`、`bad_page`、`/proc/buddyinfo` | ✅ [buddy_bug_lab](learn_page_alloc/buddy_bug_lab/) |
+| P01 | double free | 同一个页 `__free_pages()` 两次 | pcp/buddy 损坏、bad page、后续分配崩溃 | `CONFIG_DEBUG_VM`、`bad_page`、`/proc/buddyinfo` | ✅ [buddy_bug_lab](../labs/learn_page_alloc/buddy_bug_lab/) |
 | P02 | free 错 order | `alloc_pages(order=2)` 却 `__free_pages(page, 0)` | 页泄漏、buddy 链表错乱、静默损坏 | `CONFIG_DEBUG_VM`、page owner | ⚠️📋 待做 |
 | P03 | free 非自己持有的页 | `__free_pages(virt_to_page(stack))`、free 已释放页 | bad page、panic | `CONFIG_DEBUG_VM`、`bad_page` | ⚠️📋 待做 |
-| P04 | 页 UAF | 释放后继续用 `struct page *` 或页内容 | 读到新对象、改坏别人数据、延迟 crash | KASAN、`DEBUG_PAGEALLOC`、`PAGE_POISONING` | 🧪 [page_refcount mode=2](learn_page_alloc/page_refcount_bug_lab/) |
-| P05 | refcount 泄漏 | 多 `get_page()`、少 `put_page()` | `MemFree` 慢慢下降，无 warning | `page_ref_count`、page owner | 🧪 [page_refcount mode=1](learn_page_alloc/page_refcount_bug_lab/) |
-| P06 | refcount 下溢/提前释放 | 多 `put_page()`、直接改 `_refcount` | 页提前回 allocator，UAF | `CONFIG_DEBUG_VM`、`page_ref_count` | 🧪 [page_refcount mode=2](learn_page_alloc/page_refcount_bug_lab/) |
+| P04 | 页 UAF | 释放后继续用 `struct page *` 或页内容 | 读到新对象、改坏别人数据、延迟 crash | KASAN、`DEBUG_PAGEALLOC`、`PAGE_POISONING` | 🧪 [page_refcount mode=2](../labs/learn_page_alloc/page_refcount_bug_lab/) |
+| P05 | refcount 泄漏 | 多 `get_page()`、少 `put_page()` | `MemFree` 慢慢下降，无 warning | `page_ref_count`、page owner | 🧪 [page_refcount mode=1](../labs/learn_page_alloc/page_refcount_bug_lab/) |
+| P06 | refcount 下溢/提前释放 | 多 `put_page()`、直接改 `_refcount` | 页提前回 allocator，UAF | `CONFIG_DEBUG_VM`、`page_ref_count` | 🧪 [page_refcount mode=2](../labs/learn_page_alloc/page_refcount_bug_lab/) |
 | P07 | 不检查分配失败 | `alloc_pages()` 返回 NULL 直接解引用 | NULL deref/oops | 代码审查、`should_fail_alloc_page()` | 📋 待做（简单） |
 | P08 | order 超限 | `order >= MAX_ORDER` | WARN、返回 NULL、调用方没处理 | dmesg、`MAX_ORDER` | 📋 待做 |
-| P09 | GFP 上下文错误 | 原子上下文用 `GFP_KERNEL` | `sleeping function called from invalid context` | `CONFIG_DEBUG_ATOMIC_SLEEP` | ✅ [gfp_context_bug_lab](learn_page_alloc/gfp_context_bug_lab/) |
-| P10 | GFP flag 行为误用 | `__GFP_NORETRY`/`NOFS`/`ATOMIC` 语义理解错 | 睡眠、递归回收、保留内存耗尽 | `might_sleep`、`gfp_keypoints.md` | ✅ [gfp_keypoints.md](learn_page_alloc/gfp_context_bug_lab/gfp_keypoints.md) |
-| P11 | pcp/buddy 状态损坏 | double free/错 order/并发 free | 分配失败、页重复分配、崩溃 | `bad_page`、`/proc/pagetypeinfo` | ✅ [buddy_bug_lab](learn_page_alloc/buddy_bug_lab/) |
+| P09 | GFP 上下文错误 | 原子上下文用 `GFP_KERNEL` | `sleeping function called from invalid context` | `CONFIG_DEBUG_ATOMIC_SLEEP` | ✅ [gfp_context_bug_lab](../labs/learn_page_alloc/gfp_context_bug_lab/) |
+| P10 | GFP flag 行为误用 | `__GFP_NORETRY`/`NOFS`/`ATOMIC` 语义理解错 | 睡眠、递归回收、保留内存耗尽 | `might_sleep`、`gfp_keypoints.md` | ✅ [gfp_keypoints.md](../labs/learn_page_alloc/gfp_context_bug_lab/gfp_keypoints.md) |
+| P11 | pcp/buddy 状态损坏 | double free/错 order/并发 free | 分配失败、页重复分配、崩溃 | `bad_page`、`/proc/pagetypeinfo` | ✅ [buddy_bug_lab](../labs/learn_page_alloc/buddy_bug_lab/) |
 | P12 | compound page 引用错误 | 只 put 头页/尾页，`__GFP_COMP` 使用不当 | 尾页 refcount 错、提前释放 | `CONFIG_DEBUG_VM`、`page_ref_count` | 📋 待做 |
 | P13 | `split_page()` 误用 | split 后 head/tail 引用计数没理清 | 泄漏或重复释放 | `CONFIG_DEBUG_VM` | 📋 待做 |
 | P14 | `alloc_pages_exact`/`free_pages_exact` 不配对 | free 的 size 与 alloc 不一致 | 释放错页/泄漏/损坏 | `CONFIG_DEBUG_VM` | ⚠️📋 待做 |
-| P15 | 页泄漏 | 忘记 `__free_pages`/`put_page` | `MemFree` 下降，无 crash | page owner、`/proc/meminfo` | 🧪 [page_refcount](learn_page_alloc/page_refcount_bug_lab/) |
+| P15 | 页泄漏 | 忘记 `__free_pages`/`put_page` | `MemFree` 下降，无 crash | page owner、`/proc/meminfo` | 🧪 [page_refcount](../labs/learn_page_alloc/page_refcount_bug_lab/) |
 | P16 | highmem/kmap 不平衡 | 32-bit highmem 下 `kmap`/`kunmap` 不配对 | map count 泄漏、地址耗尽 | `CONFIG_DEBUG_KMAP`（若可用） | 📋 不适用当前 64-bit |
 | P17 | page_pool/page_frag 生命周期 | 页归还 pool 后继续使用 | UAF、DMA 读到错误数据 | KASAN、驱动自检 | 📋 待做（网络方向） |
 
@@ -53,9 +53,9 @@
 
 | # | Bug | 典型机制 | 现象 | 调试/检测 | Demo |
 |---|---|---|---|---|---|
-| S01 | slab double free | 同一个对象 `kfree()` 两次 | freelist 损坏、同一对象分给两人 | `slub_debug=F`、KASAN | 🧪 [slab_uaf mode=2](learn_page_alloc/slab_uaf_bug_lab/) ⚠️ |
-| S02 | slab UAF | `kfree()` 后继续读写旧指针 | 读到新对象、静默数据破坏 | KASAN、KFENCE、`slub_debug` | 🧪 [slab_uaf mode=1](learn_page_alloc/slab_uaf_bug_lab/) |
-| S03 | slab 越界写/读 | `kmalloc(32)` 写 64 字节 | 破坏 redzone/相邻对象/元数据 | KASAN、`slub_debug=Z` | 🧪 [slab_uaf mode=3](learn_page_alloc/slab_uaf_bug_lab/) ⚠️ |
+| S01 | slab double free | 同一个对象 `kfree()` 两次 | freelist 损坏、同一对象分给两人 | `slub_debug=F`、KASAN | 🧪 [slab_uaf mode=2](../labs/learn_page_alloc/slab_uaf_bug_lab/) ⚠️ |
+| S02 | slab UAF | `kfree()` 后继续读写旧指针 | 读到新对象、静默数据破坏 | KASAN、KFENCE、`slub_debug` | 🧪 [slab_uaf mode=1](../labs/learn_page_alloc/slab_uaf_bug_lab/) |
+| S03 | slab 越界写/读 | `kmalloc(32)` 写 64 字节 | 破坏 redzone/相邻对象/元数据 | KASAN、`slub_debug=Z` | 🧪 [slab_uaf mode=3](../labs/learn_page_alloc/slab_uaf_bug_lab/) ⚠️ |
 | S04 | kmem_cache double free | cache 对象 free 两次 | freelist 损坏、延迟 crash | `slub_debug`、KASAN | 📋 待做 |
 | S05 | cache 销毁时还有对象 | `kmem_cache_destroy()` 时对象仍在使用 | UAF、cache 元数据损坏 | KASAN、`slabinfo` | ⚠️📋 待做 |
 | S06 | kfree/vfree 混用 | `kfree(vmalloc_ptr)`、`vfree(kmalloc_ptr)` | 立即 BUG/panic | 代码审查、KASAN | ⚠️📋 待做 |
@@ -84,7 +84,7 @@
 
 | # | Bug | 典型机制 | 现象 | 调试/检测 | Demo |
 |---|---|---|---|---|---|
-| M01 | VMA UAF（merge） | merge 后继续用旧 VMA 指针 | 访问已释放 VMA、crash | KASAN、VMA 调试 | ✅ [patch_exercise_01](patch_exercise_01_vma_merge_uaf.md) |
+| M01 | VMA UAF（merge） | merge 后继续用旧 VMA 指针 | 访问已释放 VMA、crash | KASAN、VMA 调试 | ✅ [patch_exercise_01](../exercises/patch_exercise_01_vma_merge_uaf.md) |
 | M02 | vm_ops open/close 生命周期 | VMA 关闭后 private data 已释放 | UAF、mmap 回调踩空 | KASAN、`vm_ops` 审查 | 📋 待做 |
 | M03 | 模块卸载时还有映射 | module 卸载但用户仍 mmap | UAF/panic | 引用计数、`vm_ops->close` | ⚠️📋 待做 |
 | M04 | remap_pfn_range 参数错 | PFN/大小/权限不对 | 映射错页、越界、权限漏洞 | `CONFIG_DEBUG_VM`、用户态验证 | ⚠️📋 待做 |
@@ -125,7 +125,7 @@
 ### 7.1 页引用计数
 
 ```bash
-cd linux_learning/kernel_learning_map/memory/learn_page_alloc/page_refcount_bug_lab
+cd linux_learning/kernel_learning_map/memory/labs/learn_page_alloc/page_refcount_bug_lab
 make install
 ```
 
@@ -140,7 +140,7 @@ guest：
 ### 7.2 Slab UAF
 
 ```bash
-cd linux_learning/kernel_learning_map/memory/learn_page_alloc/slab_uaf_bug_lab
+cd linux_learning/kernel_learning_map/memory/labs/learn_page_alloc/slab_uaf_bug_lab
 make install
 ```
 

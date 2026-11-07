@@ -71,7 +71,7 @@ rmmod
 
 ### 3.1 `put_page_testzero()` 决定第二次 free “什么都不做”
 
-[`mm/page_alloc.c:5451`](../../../../../../runninglinuxkernel_5.15/mm/page_alloc.c#L5451)（准确行号以你的树为准，下同）：
+[`mm/page_alloc.c:5451`](../../../../../../../runninglinuxkernel_5.15/mm/page_alloc.c#L5451)（准确行号以你的树为准，下同）：
 
 ```c
 void __free_pages(struct page *page, unsigned int order)
@@ -84,7 +84,7 @@ void __free_pages(struct page *page, unsigned int order)
 }
 ```
 
-[`include/linux/mm.h:745`](../../../../../../runninglinuxkernel_5.15/include/linux/mm.h#L745)：
+[`include/linux/mm.h:745`](../../../../../../../runninglinuxkernel_5.15/include/linux/mm.h#L745)：
 
 ```c
 static inline int put_page_testzero(struct page *page)

@@ -148,4 +148,4 @@
 ## 进阶衔接
 
 - 走完这条链,阶段 6(fork/COW/rmap)的入口就清楚了:fork → `dup_mmap` → `copy_page_range`(mm/memory.c)把 PTE 复制并置只读;写 → `do_wp_page`。你 E14 实验验证的正是它。
-- 真实补丁练习 #1(本目录 `patch_exercise_01_vma_merge_uaf.md`)现在读起来会轻松得多——bug 就在你刚走过的 `mmap_region` 路径上。
+- 真实补丁练习 #1(`../../../exercises/patch_exercise_01_vma_merge_uaf.md`)现在读起来会轻松得多——bug 就在你刚走过的 `mmap_region` 路径上。

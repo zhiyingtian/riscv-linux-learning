@@ -40,7 +40,7 @@ printk("%02x\n", ((u8 *)p)[0]); /* UAF 读：可能读到 0x42 */
 ## 2. 快速开始
 
 ```bash
-cd linux_learning/kernel_learning_map/memory/learn_page_alloc/slab_uaf_bug_lab
+cd linux_learning/kernel_learning_map/memory/labs/learn_page_alloc/slab_uaf_bug_lab
 make install
 ```
 

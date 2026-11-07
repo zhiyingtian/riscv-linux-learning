@@ -4,7 +4,7 @@
 >
 > 本文是最初的 6-milestone 方案；review 后的 9 阶段版本见：[tiny_mm_learning_framework.md](tiny_mm_learning_framework.md)
 >
-> M0/M1 实验脚手架：[tiny_mm/README.md](tiny_mm/README.md)
+> M0/M1 实验脚手架：[README.md](README.md)
 >
 > 定位：用户态 C 项目，不是内核模块。原因：可以安全地注入 double free/UAF/错 order，能用 ASan/UBSan 抓问题，能自动跑测试；结构命名和 Linux 5.15 对齐，学完再回看内核源码。
 
@@ -371,7 +371,7 @@ struct mm_struct {
 | `vmm.c` 页表/缺页 | `mm/memory.c`、`arch/riscv/include/asm/pgtable.h` |
 | `rmap.c` 反向映射/COW | `mm/rmap.c`、`mm/memory.c` |
 | `slab.c` | `mm/slub.c`、`include/linux/slab.h` |
-| 测试/注入 bug | 之前四个 lab + `memory_bug_catalog.md` |
+| 测试/注入 bug | 之前四个 lab + `../catalog/memory_bug_catalog.md` |
 
 ---
 

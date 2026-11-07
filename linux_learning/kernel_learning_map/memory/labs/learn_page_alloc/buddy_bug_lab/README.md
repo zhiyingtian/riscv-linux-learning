@@ -99,7 +99,7 @@ pool_release_all()
 ### 3.1 host 编译并同步到 9p 共享目录
 
 ```bash
-cd linux_learning/kernel_learning_map/memory/learn_page_alloc/buddy_bug_lab
+cd linux_learning/kernel_learning_map/memory/labs/learn_page_alloc/buddy_bug_lab
 make install
 ```
 

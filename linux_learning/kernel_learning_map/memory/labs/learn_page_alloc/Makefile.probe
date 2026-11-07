@@ -1,0 +1,28 @@
+CC ?= gcc
+CFLAGS ?= -O2 -Wall -Wextra
+TARGET := page_alloc_probe
+SRC := page_alloc_probe.c
+CROSS := riscv64-linux-gnu-
+
+# qemu 9p 共享目录(guest 里挂载为 kmod_mount)
+SHARED ?= /home/alan/workspace/riscv/runninglinuxkernel_5.15/kmodules/learn_page_alloc
+
+.PHONY: all riscv64 install clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	$(CC) $(CFLAGS) -o $@ $^
+
+# 交叉编译成 guest 可直接跑的静态二进制
+riscv64: $(SRC)
+	$(CROSS)gcc -static -O2 -Wall -Wextra -s -o ${TARGET}_riscv64 $^
+
+# 编译并同步到 guest 可见目录
+install: riscv64
+	mkdir -p $(SHARED)
+	cp ${TARGET}_riscv64 $(SHARED)/
+	@echo "已复制到 $(SHARED)/${TARGET}_riscv64"
+
+clean:
+	rm -f $(TARGET) ${TARGET}_riscv64
