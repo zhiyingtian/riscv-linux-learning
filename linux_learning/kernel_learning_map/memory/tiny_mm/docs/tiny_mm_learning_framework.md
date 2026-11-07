@@ -1,10 +1,10 @@
 # tiny-mm 学习框架（Review 版）
 
 > 配套项目说明：[memory_capstone_tiny_mm.md](memory_capstone_tiny_mm.md)
-> 核心概念底稿：[内存管理核心数据结构与地址转换.md](../notes/内存管理核心数据结构与地址转换.md)
+> 核心概念底稿：[内存管理核心数据结构与地址转换.md](../../notes/内存管理核心数据结构与地址转换.md)
 > 目标：用一个小项目把物理页、页表、VMA、rmap、COW、slab、页缓存/回收串起来，而不是继续堆零散 demo。
 >
-> M0/M1 实验脚手架：[README.md](README.md)
+> M0/M1 实验脚手架：[README.md](../README.md)
 
 ---
 
@@ -555,13 +555,13 @@ M0–M6（6 周）
 | 阶段 | 先读 | 做完后对照 |
 |---|---|---|
 | M0 | 本文件 | `memory_capstone_tiny_mm.md` |
-| M1 | [内存管理核心数据结构与地址转换.md](../notes/内存管理核心数据结构与地址转换.md) 第 3.4–3.6、4.5–4.8 | [page_refcount_bug_lab](../labs/learn_page_alloc/page_refcount_bug_lab/) |
+| M1 | [内存管理核心数据结构与地址转换.md](../../notes/内存管理核心数据结构与地址转换.md) 第 3.4–3.6、4.5–4.8 | [page_refcount_bug_lab](../../labs/learn_page_alloc/page_refcount_bug_lab/) |
 | M2 | `gfp_keypoints.md`、`buddy_bug_lab` | `/proc/buddyinfo`、`/proc/pagetypeinfo` |
-| M3 | 第 3.3、4.4、4.7 | [gfp_context_bug_lab](../labs/learn_page_alloc/gfp_context_bug_lab/)、页表 walk 实验 |
-| M4 | 第 3.1–3.2、4.1、4.4 | [learn_mmap](../labs/learn_mmap/) |
-| M5 | 第 3.4、4.2–4.3 | [patch_exercise_01_vma_merge_uaf.md](../exercises/patch_exercise_01_vma_merge_uaf.md) |
-| M6 | [slab_uaf_bug_lab](../labs/learn_page_alloc/slab_uaf_bug_lab/)、[memory_bug_catalog.md](../catalog/memory_bug_catalog.md) | `/proc/slabinfo` |
-| M7 | [memory_half_year_roadmap.md](../plans/memory_half_year_roadmap.md) 的 page cache/reclaim 阶段 | `/proc/vmstat`、`/proc/meminfo` |
+| M3 | 第 3.3、4.4、4.7 | [gfp_context_bug_lab](../../labs/learn_page_alloc/gfp_context_bug_lab/)、页表 walk 实验 |
+| M4 | 第 3.1–3.2、4.1、4.4 | [learn_mmap](../../labs/learn_mmap/) |
+| M5 | 第 3.4、4.2–4.3 | [patch_exercise_01_vma_merge_uaf.md](../../exercises/patch_exercise_01_vma_merge_uaf.md) |
+| M6 | [slab_uaf_bug_lab](../../labs/learn_page_alloc/slab_uaf_bug_lab/)、[memory_bug_catalog.md](../../catalog/memory_bug_catalog.md) | `/proc/slabinfo` |
+| M7 | [memory_half_year_roadmap.md](../../plans/memory_half_year_roadmap.md) 的 page cache/reclaim 阶段 | `/proc/vmstat`、`/proc/meminfo` |
 | M8 | GUP/DMA 文档（后续补） | `pin_user_pages` 实验 |
 | M9 | 全部 | 闭卷画图 |
 

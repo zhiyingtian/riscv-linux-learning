@@ -27,9 +27,12 @@ memory/
 │   ├── learn_page_alloc/
 │   └── cow/
 ├── tiny_mm/                  # tiny-mm capstone 项目
-│   ├── README.md             # M0/M1 实验说明
-│   ├── tiny_mm_learning_framework.md
-│   ├── memory_capstone_tiny_mm.md
+│   ├── README.md             # 总入口
+│   ├── docs/                 # M0/M1 阶段文档、完整框架
+│   │   ├── m0-toolchain.md
+│   │   ├── m1-physical-pages.md
+│   │   ├── tiny_mm_learning_framework.md
+│   │   └── memory_capstone_tiny_mm.md
 │   └── ...
 ├── exercises/                # 补丁/代码阅读练习
 │   └── patch_exercise_01_vma_merge_uaf.md
@@ -55,7 +58,7 @@ memory/
 
 - [内存管理核心数据结构与地址转换](notes/内存管理核心数据结构与地址转换.md)
 - [内存管理知识点（原始问题）](notes/内存管理知识点.md)
-- [tiny-mm 学习框架](tiny_mm/tiny_mm_learning_framework.md)
+- [tiny-mm 学习框架](tiny_mm/docs/tiny_mm_learning_framework.md)
 - [tiny-mm M0/M1 实验](tiny_mm/README.md)
 - [内存管理 bug 清单](catalog/memory_bug_catalog.md)
 
