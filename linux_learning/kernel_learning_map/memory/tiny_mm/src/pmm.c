@@ -85,7 +85,11 @@ void pmm_exit(void)
 unsigned long page_to_pfn(const struct page *page)
 {
 	(void)page;
-	return 0; /* TODO */
+
+	if(page < g_pmm.pages || page >= g_pmm.pages + g_pmm.nr_pages)
+		return 0;
+
+	return page - g_pmm.pages + g_pmm.start_pfn;
 }
 
 /*
@@ -97,8 +101,9 @@ unsigned long page_to_pfn(const struct page *page)
  */
 struct page *pfn_to_page(unsigned long pfn)
 {
-	(void)pfn;
-	return NULL; /* TODO */
+	if(pfn < g_pmm.start_pfn || pfn >= g_pmm.start_pfn + g_pmm.nr_pages)
+		return NULL;
+	return &g_pmm.pages[pfn - g_pmm.start_pfn];
 }
 
 bool pfn_valid(unsigned long pfn)
@@ -114,8 +119,7 @@ bool pfn_valid(unsigned long pfn)
  */
 phys_addr_t pfn_to_phys(unsigned long pfn)
 {
-	(void)pfn;
-	return 0; /* TODO */
+	return pfn << PAGE_SHIFT;
 }
 
 /*
@@ -125,8 +129,7 @@ phys_addr_t pfn_to_phys(unsigned long pfn)
  */
 unsigned long phys_to_pfn(phys_addr_t paddr)
 {
-	(void)paddr;
-	return 0; /* TODO */
+	return paddr >> PAGE_SHIFT;
 }
 
 /*
@@ -147,8 +150,21 @@ unsigned long phys_to_pfn(phys_addr_t paddr)
  */
 struct page *pmm_alloc_pages(unsigned int order)
 {
-	(void)order;
-	return NULL; /* TODO */
+	if(order != 0)
+		return NULL;
+	for (unsigned i = 0; i < g_pmm.nr_pages; i ++) {
+		if(g_pmm.bitmap[i] == 0) {
+			g_pmm.bitmap[i] = 1;
+			g_pmm.pages[i].is_free = false;
+			g_pmm.pages[i].order = 0;
+			g_pmm.pages[i].refcount = 1;
+			g_pmm.free_count --;
+			g_pmm.node.node_zones[0].free_count --;
+			return &g_pmm.pages[i];
+		}
+	}
+	// no page avail.
+	return NULL;
 }
 
 /*
@@ -174,7 +190,17 @@ int pmm_free_pages(struct page *page, unsigned int order)
 {
 	(void)page;
 	(void)order;
-	return -EINVAL; /* TODO */
+	if(!page || page < g_pmm.pages || page >= g_pmm.pages + g_pmm.nr_pages || page->refcount == 0 || order != 0 || \
+		page->is_free == true || page->order != 0)
+		return -EINVAL;
+	g_pmm.bitmap[page - g_pmm.pages] = 0;
+	page->is_free = true;
+	page->refcount = 0;
+	page->order = 0;
+	g_pmm.free_count ++;
+	g_pmm.node.node_zones[0].free_count ++;
+
+	return 0;
 }
 
 struct zone *page_zone(const struct page *page)
