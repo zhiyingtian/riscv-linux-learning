@@ -2,6 +2,8 @@
 
 > 项目总入口：[../README.md](../README.md)
 > 下一阶段：[m1-physical-pages.md](m1-physical-pages.md)
+>
+> 当前状态：M0 已通过；M1 已完成，`make test` 应全部通过。本文保留为 M0 的验收/复习指南。
 
 ## 目标
 

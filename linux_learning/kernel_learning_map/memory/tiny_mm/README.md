@@ -22,11 +22,11 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 | 阶段 | 状态 | 入口 |
 |---|---|---|
 | M0 工具链/测试框架 | ✅ 已搭好 | [docs/m0-toolchain.md](docs/m0-toolchain.md) |
-| M1 物理页模型 | 🚧 核心函数 TODO | [docs/m1-physical-pages.md](docs/m1-physical-pages.md) |
+| M1 物理页模型 | ✅ 已完成（56a96a7） | [docs/m1-physical-pages.md](docs/m1-physical-pages.md) |
 | M2 buddy/pcp | 未开始 | 框架里的 M2 |
 | M3 页表/TLB | 未开始 | 框架里的 M3 |
 
-> `make test` 现在是**预期失败**：`init` 通过，其余 10 个测试等 M1 实现。
+> M1 已完成：`make test` 11 个测试全部通过。M2 尚未开始。
 
 ---
 
@@ -43,7 +43,7 @@ tiny_mm/
 ├── include/
 │   └── tmm.h                       # 数据结构与 API
 ├── src/
-│   └── pmm.c                       # 物理页实现（M1 核心 TODO）
+│   └── pmm.c                       # 物理页实现（M1 已完成）
 ├── tests/
 │   ├── test_runner.h               # 测试 runner
 │   └── test_pmm.c                  # M1 的 11 个验收测试
@@ -70,26 +70,22 @@ make clean
 make SAN= test
 ```
 
-当前预期输出：
+M1 完成后的预期输出：
 
 ```text
 [PASS] init
-[FAIL] alloc/free
-[FAIL] pfn/page roundtrip
+[PASS] alloc/free
 ...
-[FAIL] pgdat
-[FAIL] random stress
+[PASS] random stress
 
-10 test(s) failed
+all tests passed
 ```
-
-这是 M1 的练习入口，不是代码损坏。
 
 ---
 
-## M1 要做什么
+## M1 已完成的实现
 
-打开 `src/pmm.c`，完成这些 TODO：
+`src/pmm.c` 中这些函数已经实现：
 
 - `page_to_pfn()` / `pfn_to_page()`
 - `pfn_to_phys()` / `phys_to_pfn()`

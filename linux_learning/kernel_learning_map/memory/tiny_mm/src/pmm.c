@@ -74,7 +74,7 @@ void pmm_exit(void)
 }
 
 /*
- * TODO(M1): 实现 page -> PFN。
+ * M1: 实现 page -> PFN。
  *
  * 提示：
  *   - g_pmm.pages 的索引 0 对应 g_pmm.start_pfn；
@@ -93,7 +93,7 @@ unsigned long page_to_pfn(const struct page *page)
 }
 
 /*
- * TODO(M1): 实现 PFN -> page。
+ * M1: 实现 PFN -> page。
  *
  * 提示：
  *   - pfn < start_pfn 或 >= start_pfn + nr_pages 时返回 NULL；
@@ -113,7 +113,7 @@ bool pfn_valid(unsigned long pfn)
 }
 
 /*
- * TODO(M1): PFN -> 物理字节地址。
+ * M1: PFN -> 物理字节地址。
  *
  * paddr = pfn << PAGE_SHIFT
  */
@@ -123,7 +123,7 @@ phys_addr_t pfn_to_phys(unsigned long pfn)
 }
 
 /*
- * TODO(M1): 物理字节地址 -> PFN。
+ * M1: 物理字节地址 -> PFN。
  *
  * pfn = paddr >> PAGE_SHIFT
  */
@@ -133,7 +133,7 @@ unsigned long phys_to_pfn(phys_addr_t paddr)
 }
 
 /*
- * TODO(M1): 分配 order 个连续页。
+ * M1: 分配 order 个连续页。
  *
  * M1 只支持 order == 0：
  *   - order != 0 直接返回 NULL；
@@ -168,7 +168,7 @@ struct page *pmm_alloc_pages(unsigned int order)
 }
 
 /*
- * TODO(M1): 释放页。
+ * M1: 释放页。
  *
  * 返回 0 成功，-EINVAL 失败。必须检查：
  *   - page 非空且在 pages 数组范围内；

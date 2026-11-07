@@ -3,6 +3,8 @@
 > 项目总入口：[../README.md](../README.md)
 > 上一阶段：[m0-toolchain.md](m0-toolchain.md)
 > 完整框架：[tiny_mm_learning_framework.md](tiny_mm_learning_framework.md)
+>
+> **状态：✅ 已完成（commit 56a96a7，11/11 tests pass）。本文保留为实现/复习指南。**
 
 ## 目标
 
@@ -38,7 +40,7 @@ M1 只做 order=0，buddy 留给 M2。
 
 M1 的 page 数组、bitmap、zone、pglist_data 初始状态由 `pmm_init()` 建好。
 
-## 需要实现的 TODO
+## 实现要点（M1 已完成）
 
 | 函数 | 语义 |
 |---|---|
