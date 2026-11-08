@@ -31,6 +31,7 @@ typedef uint64_t phys_addr_t;
 struct page {
 	unsigned long flags;	/* 保留：M1 不用，M2+ 可放 zone/order 状态 */
 	unsigned int order;	/* 当前页的 order；free 时用于检查 free 错 order */
+	struct page *buddy_next;	/* M2: free_area 空闲链表指针，仅空闲块头使用 */
 	int refcount;		/* 引用计数：alloc 后 1，free 后 0 */
 	bool is_free;		/* 是否在 allocator 的空闲集合里 */
 	unsigned int zone_id;	/* 属于哪个 zone（M1 只有一个 zone） */
