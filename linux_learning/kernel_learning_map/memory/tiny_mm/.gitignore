@@ -3,3 +3,6 @@ build/
 # clangd / compile database
 .cache/
 compile_commands.json
+
+# VS Code debug build
+build-debug/

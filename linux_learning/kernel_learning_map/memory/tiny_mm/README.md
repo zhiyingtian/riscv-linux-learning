@@ -93,6 +93,42 @@ all tests passed
 
 ---
 
+## VS Code 调试
+
+仓库根目录的 `.vscode/launch.json` 已经加了 tiny-mm 的 gdb 配置：
+
+- `tiny-mm: debug M2 buddy`
+- `tiny-mm: debug M1 pmm`
+
+使用方式：
+
+1. 安装 VS Code 的 **C/C++** 扩展；
+2. 打开 `src/buddy.c`，在 `buddy_alloc()` / `buddy_free()` 里打断点；
+3. 按 `F5`，选择 `tiny-mm: debug M2 buddy`；
+4. 启动前会自动执行任务 `tiny-mm: build M2 (debug)`。
+
+调试构建使用独立的 `build-debug/`，并且**关闭 ASan/UBSan**，避免 sanitizer 干扰 gdb：
+
+```text
+CFLAGS  = -O0 -g
+SAN     =
+program = build-debug/test_buddy
+```
+
+手动构建：
+
+```bash
+make debug-m2
+# 或
+make debug-m1
+```
+
+普通的 `make test` / `make test-m2` 仍然使用 `build/` 和 sanitizer，两者互不覆盖。
+
+如果 `gdb` 不在 `/usr/bin/gdb`，修改 `.vscode/launch.json` 里的 `miDebuggerPath`。
+
+---
+
 ## M1 已完成的实现
 
 `src/pmm.c` 中这些函数已经实现：

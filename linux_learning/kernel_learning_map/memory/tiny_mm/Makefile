@@ -6,12 +6,15 @@ LDFLAGS ?=
 LDLIBS ?=
 
 BUILD_DIR := build
+DEBUG_BUILD_DIR := build-debug
 M1_TARGET := $(BUILD_DIR)/test_pmm
 M2_TARGET := $(BUILD_DIR)/test_buddy
+DEBUG_M1_TARGET := $(DEBUG_BUILD_DIR)/test_pmm
+DEBUG_M2_TARGET := $(DEBUG_BUILD_DIR)/test_buddy
 M1_OBJS := $(BUILD_DIR)/pmm.o $(BUILD_DIR)/test_pmm.o
 M2_OBJS := $(BUILD_DIR)/buddy.o $(BUILD_DIR)/test_buddy.o
 
-.PHONY: all test test-m1 test-m2 test-all clean
+.PHONY: all test test-m1 test-m2 test-all debug-m1 debug-m2 clean
 
 all: $(M1_TARGET) $(M2_TARGET)
 
@@ -45,6 +48,14 @@ test-m2: $(M2_TARGET)
 	./$(M2_TARGET)
 
 test-all: test-m1 test-m2
+
+debug-m1:
+	$(MAKE) BUILD_DIR=$(DEBUG_BUILD_DIR) clean
+	$(MAKE) BUILD_DIR=$(DEBUG_BUILD_DIR) SAN= $(DEBUG_M1_TARGET)
+
+debug-m2:
+	$(MAKE) BUILD_DIR=$(DEBUG_BUILD_DIR) clean
+	$(MAKE) BUILD_DIR=$(DEBUG_BUILD_DIR) SAN= $(DEBUG_M2_TARGET)
 
 clean:
 	rm -rf $(BUILD_DIR)
