@@ -15,7 +15,8 @@ static int order_for_pages(unsigned long nr_pages, unsigned int *order)
 {
 	unsigned long n = nr_pages;
 	unsigned int o = 0;
-
+	// nr_pages 必须是 2 的幂
+	// 只有nr_pages是2的幂时，nr_pages & (nr_pages - 1) 才等于0
 	if (nr_pages == 0 || (nr_pages & (nr_pages - 1)) != 0)
 		return -EINVAL;
 
@@ -74,9 +75,6 @@ void buddy_exit(struct buddy *b)
 
 struct page *buddy_alloc(struct buddy *b, unsigned int order)
 {
-	(void)b;
-	(void)order;
-
 	/*
 	 * TODO(M2):
 	 *   1. 校验 b/order；
@@ -86,6 +84,63 @@ struct page *buddy_alloc(struct buddy *b, unsigned int order)
 	 *   5. 最终低半就是分配结果；
 	 *   6. 更新 page 字段和 free_count。
 	 */
+
+	if(!b || order > b->max_order)
+		return NULL;
+
+	for(unsigned int o = order; o <= b->max_order; o ++)
+	{
+		if(b->free_area[o].head != NULL && b->free_area[o].nr_free > 0)
+		{
+			
+			// 当前order的free area不满足所申请的pages，向上查找，如找到则拆分处理
+			while(o > order)
+			{
+				struct page *p = b->free_area[o].head;
+				// 将当前order的free area的头部空闲块摘下，更新当前order free area的head，指向p的下一个空闲块
+				b->free_area[o].head = p->buddy_next;
+				b->free_area[o].nr_free --;
+
+				// 将当前块拆分为两个order-1的块，低半部分继续作为候选，高半部分挂到低一级的free area
+
+				// 1.计算高半部分buddy的地址
+				// 2.初始化此buddy的order、is_free、refcount
+				// 3.将高半部分挂到低一级的free area
+				// 4.更新当前块的order
+				// 5.o减1，继续循环，直到o等于order
+				struct page *buddy = p + (1UL << (o - 1));
+				buddy->order = o - 1;
+				buddy->is_free = true;
+				buddy->refcount = 0;
+				
+				// 姑且先把拆封后的page挂到低一级free area的头部（此时并free area链表并没有按照地址顺序排列）
+				p->buddy_next = buddy;
+				buddy->buddy_next = b->free_area[o - 1].head;
+				b->free_area[o - 1].head = p;
+				b->free_area[o - 1].nr_free += 2;
+
+				// 更新当前块的order
+				p->order = o - 1;
+				// 更新当前order free area的head，指向p的下一个空闲块、
+				// 这部分操作必须放到操作完p之q前，否则p更新的是buddy_next，导致链表断裂
+				
+				o --;
+			}
+			// 如果当前order等于请求的order，则直接分配该块
+			if(o == order)
+			{
+				// 指针p指向伙伴系统在当前order下的free area中的第一个空闲块
+				struct page *p = b->free_area[o].head;
+				b->free_area[o].head = p->buddy_next;
+				b->free_area[o].nr_free --;
+				b->free_count -= (1UL << order);
+				p->is_free = false;
+				p->refcount = 1;
+				return p;
+			}
+		}
+	}
+
 	return NULL;
 }
 
@@ -103,6 +158,8 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 	 *   4. 合并后继续向上，直到不能合并；
 	 *   5. 把最终块挂回对应 free_area，更新 free_count。
 	 */
+	 
+
 	return -EINVAL;
 }
 
@@ -128,12 +185,15 @@ int buddy_check(const struct buddy *b)
 		while (p) {
 			unsigned long index;
 
+			// 判断 p 是否在 pages 范围内
 			if (p < b->pages || p >= b->pages + b->nr_pages)
 				return -EINVAL;
+			// 判断 p 是否是空闲块头，p 的 order 是否与 free_area[i] 的 order 匹配，p 的 refcount 是否为 0
 			if (!p->is_free || p->order != i || p->refcount != 0)
 				return -EINVAL;
 
 			index = (unsigned long)(p - b->pages);
+			// 判断 p 是否按 2^i 对齐
 			if ((index & ((1UL << i) - 1)) != 0)
 				return -EINVAL;
 
