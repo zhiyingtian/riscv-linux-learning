@@ -118,6 +118,7 @@ struct page *buddy_alloc(struct buddy *b, unsigned int order)
 				buddy->buddy_next = b->free_area[o - 1].head;
 				b->free_area[o - 1].head = p;
 				b->free_area[o - 1].nr_free += 2;
+				b->split_count ++;
 
 				// 更新当前块的order
 				p->order = o - 1;
@@ -158,9 +159,99 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 	 *   4. 合并后继续向上，直到不能合并；
 	 *   5. 把最终块挂回对应 free_area，更新 free_count。
 	 */
-	 
+	if(!b || !page || order > b->max_order)
+		return -EINVAL;
+	if(page < b->pages || page >= b->pages + b->nr_pages)
+		return -EINVAL;
+	if(page->order != order || page->is_free || page->refcount != 1)
+		return -EINVAL;
 
-	return -EINVAL;
+	page->is_free = true;
+	page->refcount = 0;
+	b->free_count += (1UL << order);
+
+	struct page *buddy;
+	while(order < b->max_order)
+	{
+		buddy = page + (1UL << order);
+		// 判断buddy page是否在buddy系统的pages范围内，是否是空闲块，是否与page同order
+		if(buddy < b->pages || buddy >= b->pages + b->nr_pages)
+			break;
+
+		if(buddy->order == order)
+		{
+			if(buddy->is_free == false )
+			{
+				// 无法继续合并，将page挂回当前order的free area
+
+				// 在buddy page前插入page
+				struct page *prev = NULL;
+				struct page *curr = b->free_area[order].head;
+				while(curr)
+				{
+					if(curr == buddy)
+					{
+						if(prev)
+						{
+							// prev != NULL，说明buddy不是free area链表的头部，将page插入到buddy前面
+							prev->buddy_next = page;
+							page->buddy_next = buddy;
+						}
+						else
+						{
+							// prev == NULL， 说明buddy是free area链表的头部，将page插入到buddy前面
+							page->buddy_next = buddy;
+							b->free_area[order].head = page;
+						}
+						b->free_area[order].nr_free ++;
+						break;
+					}
+					prev = curr;
+					curr = curr->buddy_next;
+				}
+			}
+			else
+			{
+				// buddy是空闲块，可以合并
+				struct page *prev = NULL;
+				struct page *curr = b->free_area[order].head;
+				while(curr)
+				{
+					if(curr == buddy)
+					{
+						if(prev)
+						{
+							// prev != NULL，说明buddy不是free area链表的头部，将page和buddy从free area链表中摘下
+							prev->buddy_next = buddy->buddy_next;
+						}
+						else
+						{
+							// prev == NULL， 说明buddy是free area链表的头部，将buddy摘下，buddy->buddy_next作为free area的头部
+							b->free_area[order].head = buddy->buddy_next;
+						}
+						// order++，继续向上合并
+						b->free_area[order].nr_free --;
+						b->merge_count ++;
+						page->order ++;
+						order ++;
+						break;
+					}
+					prev = curr;
+					curr = curr->buddy_next;
+				}
+			}
+		}
+
+	}
+	if(order == b->max_order)
+	{
+		// 如果已经合并到最大order，则将page挂回当前order的free area
+		page->buddy_next = b->free_area[order].head;
+		b->free_area[order].head = page;
+		b->free_area[order].nr_free ++;
+	}
+
+	return 0;
 }
 
 unsigned long buddy_free_count(const struct buddy *b)
