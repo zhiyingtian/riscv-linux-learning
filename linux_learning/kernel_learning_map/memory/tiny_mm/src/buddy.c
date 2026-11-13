@@ -8,8 +8,28 @@
 
 #include <errno.h>
 #include <string.h>
+#include "../include/buddy.h"
 
-#include "buddy.h"
+static int page_to_pfn_m2(const struct page *page, const struct buddy *b)
+{
+	return (int)(page - b->pages);
+}
+
+static struct page *pfn_to_page_m2(int pfn, const struct buddy *b)
+{
+	return &b->pages[pfn];
+}
+
+static int find_buddy_pfn_m2(struct page *page, unsigned int order, const struct buddy *b)
+{
+	return page_to_pfn_m2(page, b) ^ (1UL << order);
+}
+
+static struct page *find_buddy_m2(struct page *page, unsigned int order, const struct buddy *b)
+{
+	return pfn_to_page_m2(find_buddy_pfn_m2(page, order, b), b);
+}
+
 
 static int order_for_pages(unsigned long nr_pages, unsigned int *order)
 {
@@ -108,7 +128,7 @@ struct page *buddy_alloc(struct buddy *b, unsigned int order)
 				// 3.将高半部分挂到低一级的free area
 				// 4.更新当前块的order
 				// 5.o减1，继续循环，直到o等于order
-				struct page *buddy = p + (1UL << (o - 1));
+				struct page *buddy = find_buddy_m2(p, o - 1, b);
 				buddy->order = o - 1;
 				buddy->is_free = true;
 				buddy->refcount = 0;
@@ -173,11 +193,12 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 	struct page *buddy;
 	while(order < b->max_order)
 	{
-		buddy = page + (1UL << order);
+		buddy = find_buddy_m2(page, order, b);
 		// 判断buddy page是否在buddy系统的pages范围内，是否是空闲块，是否与page同order
 		if(buddy < b->pages || buddy >= b->pages + b->nr_pages)
 			break;
 
+		// 如果buddy不在空闲链表中，无法合并，直接挂回当前order的free area
 		if(buddy->order == order)
 		{
 			if(buddy->is_free == false )
@@ -187,6 +208,14 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 				// 在buddy page前插入page
 				struct page *prev = NULL;
 				struct page *curr = b->free_area[order].head;
+				if(curr == NULL)
+				{
+					// 空闲的free area list
+					b->free_area[order].head = page;
+					page->buddy_next = NULL;
+					b->free_area[order].nr_free ++;
+					return 0;
+				}
 				while(curr)
 				{
 					if(curr == buddy)
@@ -215,9 +244,10 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 				// buddy是空闲块，可以合并
 				struct page *prev = NULL;
 				struct page *curr = b->free_area[order].head;
+
 				while(curr)
 				{
-					if(curr == buddy)
+					if(find_buddy_m2(page, order, b) == buddy)
 					{
 						if(prev)
 						{

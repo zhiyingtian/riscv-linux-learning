@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "buddy.h"
+#include "../include/buddy.h"
 #include "test_runner_buddy.h"
 
 #define TEST_NR_PAGES 256
