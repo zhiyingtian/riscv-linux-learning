@@ -4,7 +4,7 @@
 > 上一阶段：[m1-physical-pages.md](m1-physical-pages.md)
 > 完整框架：[tiny_mm_learning_framework.md](tiny_mm_learning_framework.md)
 >
-> **状态：✅ M2a 已完成（`make test-m2` 10/10 pass）；M2b pcp / M2c 集成未开始。**
+> **状态：✅ M2a 已完成（`make test-m2` 11/11 pass）；M2b pcp 脚手架已搭好，M2c 未开始。**
 
 ## 目标
 
@@ -47,8 +47,8 @@ tests/test_buddy.c
 所以当前：
 
 - `make test` → M1，应该全绿；
-- `make test-m2` → M2a，10/10 通过；
-- `make test-all` → 两个都跑。
+- `make test-m2` → M2a，11/11 通过；
+- `make test-all` → M1/M2a/M2b 都跑（M2b 未实现时会有预期失败）。
 
 ## 文件
 
@@ -56,7 +56,7 @@ tests/test_buddy.c
 |---|---|
 | [../include/buddy.h](../include/buddy.h) | `free_area`、`struct buddy`、API |
 | [../src/buddy.c](../src/buddy.c) | M2a 实现（含 split/merge） |
-| [../tests/test_buddy.c](../tests/test_buddy.c) | 10 个验收测试 |
+| [../tests/test_buddy.c](../tests/test_buddy.c) | 11 个验收测试 |
 | [../tests/test_runner_buddy.h](../tests/test_runner_buddy.h) | M2 测试 runner |
 
 ## 数据结构约定
@@ -133,13 +133,14 @@ struct buddy {
 
 ```c
 static void free_list_push(struct buddy *b, struct page *p, unsigned order);
-static struct page *free_list_pop(struct buddy *b, unsigned order);
+static bool free_list_contains(const struct buddy *b, const struct page *p,
+                               unsigned order);
 static int free_list_remove(struct buddy *b, struct page *p, unsigned order);
 ```
 
 如果 helper 暂时没被全部使用，先别写成未使用的 `static` 函数，否则 `-Werror` 会报 `-Wunused-function`。可以边实现边加。
 
-## 10 个验收测试
+## 11 个验收测试
 
 | 测试 | 抓什么 |
 |---|---|
@@ -152,6 +153,7 @@ static int free_list_remove(struct buddy *b, struct page *p, unsigned order);
 | `wrong order` | 分配 order 0 却按 order 1 释放，必须拒绝 |
 | `exhaust` | 256 个 order 0 全部分配，再全部释放 |
 | `invalid` | NULL/非 2 的幂/order 越界/未对齐 page |
+| `bad free-list rollback` | buddy 标记 free 但不在链表时，拒绝释放且不破坏状态 |
 | `random stress` | 2 万次随机 alloc/free，最终回到满空闲 |
 
 脚手架刚搭好时是 8 个失败；实现完成后应全部通过：
@@ -171,7 +173,7 @@ all tests passed
 cd linux_learning/kernel_learning_map/memory/tiny_mm
 
 make test        # M1，11/11
-make test-m2     # M2，10/10
+make test-m2     # M2，11/11
 make test-all    # 两个都跑
 ```
 

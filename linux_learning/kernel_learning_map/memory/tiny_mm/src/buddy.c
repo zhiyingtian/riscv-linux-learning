@@ -1,42 +1,101 @@
 /*
- * tiny-mm / M2: buddy 分配器
+ * tiny-mm / M2a: buddy allocator
  *
- * 这个文件先保持独立，不依赖 M1 的 pmm.c。
- * 你只需要实现 buddy_alloc() 和 buddy_free() 两个核心函数；
- * buddy_init()/buddy_check() 已经搭好。
+ * 这个文件保持独立，不依赖 M1 的 pmm.c。
+ * M2a 的核心是 split/merge，以及 free_area 链表和 free_count 的同步。
  */
 
 #include <errno.h>
 #include <string.h>
-#include "../include/buddy.h"
 
-static unsigned long page_to_pfn_m2(const struct page *page, const struct buddy *b)
+#include "buddy.h"
+
+static unsigned long page_index(const struct buddy *b, const struct page *page)
 {
 	return (unsigned long)(page - b->pages);
 }
 
-static struct page *pfn_to_page_m2(unsigned long pfn, const struct buddy *b)
+static bool block_valid(const struct buddy *b, const struct page *page,
+			unsigned int order)
 {
-	return &b->pages[pfn];
+	unsigned long index;
+
+	if (!b || !b->pages || !page)
+		return false;
+	if (page < b->pages || page >= b->pages + b->nr_pages)
+		return false;
+
+	index = page_index(b, page);
+	if ((index & ((1UL << order) - 1)) != 0)
+		return false;
+
+	return index + (1UL << order) <= b->nr_pages;
 }
 
-static unsigned long find_buddy_pfn_m2(struct page *page, unsigned int order, const struct buddy *b)
+static void free_list_push(struct buddy *b, struct page *page,
+			   unsigned int order)
 {
-	return page_to_pfn_m2(page, b) ^ (1UL << order);
+	page->order = order;
+	page->is_free = true;
+	page->refcount = 0;
+	page->buddy_next = b->free_area[order].head;
+	b->free_area[order].head = page;
+	b->free_area[order].nr_free++;
 }
 
-static struct page *find_buddy_m2(struct page *page, unsigned int order, const struct buddy *b)
+static bool free_list_contains(const struct buddy *b, const struct page *page,
+			       unsigned int order)
 {
-	return pfn_to_page_m2(find_buddy_pfn_m2(page, order, b), b);
+	const struct page *p;
+
+	for (p = b->free_area[order].head; p; p = p->buddy_next) {
+		if (p == page)
+			return true;
+	}
+	return false;
 }
 
+static int free_list_remove(struct buddy *b, struct page *page,
+			    unsigned int order)
+{
+	struct page **link = &b->free_area[order].head;
+
+	while (*link && *link != page)
+		link = &(*link)->buddy_next;
+
+	if (!*link)
+		return -EINVAL;
+
+	*link = page->buddy_next;
+	page->buddy_next = NULL;
+	b->free_area[order].nr_free--;
+	return 0;
+}
+
+/*
+ * 合并 low 和 high 两个同 order 的块。
+ * 合并后低地址块 low 变成 order+1 的空闲块头；
+ * 高地址块 high 变成块内部页，元数据必须清理干净。
+ */
+static void merge_page_pair(struct page *low, struct page *high)
+{
+	low->order++;
+	low->is_free = true;
+	low->refcount = 0;
+	low->buddy_next = NULL;
+
+	high->order = 0;
+	high->is_free = false;
+	high->refcount = 0;
+	high->buddy_next = NULL;
+}
 
 static int order_for_pages(unsigned long nr_pages, unsigned int *order)
 {
 	unsigned long n = nr_pages;
 	unsigned int o = 0;
-	// nr_pages 必须是 2 的幂
-	// 只有nr_pages是2的幂时，nr_pages & (nr_pages - 1) 才等于0
+
+	/* nr_pages 必须是 2 的幂 */
 	if (nr_pages == 0 || (nr_pages & (nr_pages - 1)) != 0)
 		return -EINVAL;
 
@@ -93,87 +152,45 @@ void buddy_exit(struct buddy *b)
 		memset(b, 0, sizeof(*b));
 }
 
-struct page *merge_page_metadata(struct page *buddy, struct page *page)
-{
-	buddy->order = page->order;
-	buddy->is_free = page->is_free;
-	buddy->refcount = page->refcount;
-	buddy->buddy_next = page->buddy_next;
-	buddy->flags = page->flags;
-	buddy->zone_id = page->zone_id;
-	
-	page->buddy_next = NULL;
-
-	return buddy;
-}
-
 struct page *buddy_alloc(struct buddy *b, unsigned int order)
 {
-	if(!b || order > b->max_order)
+	unsigned int o;
+
+	if (!b || order > b->max_order)
 		return NULL;
 
-	for(unsigned int o = order; o <= b->max_order; o ++)
-	{
-		if(b->free_area[o].head != NULL && b->free_area[o].nr_free > 0)
-		{
-			
-			struct page *page = b->free_area[o].head;
-			// 如果当前order等于请求的order，则直接分配该块
-			if(o == order)
-			{
-				b->free_area[o].head = page->buddy_next;
-				b->free_area[o].nr_free --;
-				b->free_count -= (1UL << order);
-				page->is_free = false;
-				page->refcount = 1;
-				page->buddy_next = NULL;
-				return page;
-			}
-			// 当前order的free area不满足所申请的pages，向上查找，如找到则拆分处理
-			else
-			{
-				// 将当前order的free area的头部空闲块摘下，更新当前order free area的head，指向page的下一个空闲块
-				b->free_area[o].head = page->buddy_next;
-				b->free_area[o].nr_free --;
+	for (o = order; o <= b->max_order; o++) {
+		struct page *page = b->free_area[o].head;
 
-				// 将当前块拆分为两个order-1的块，低半部分继续作为候选，高半部分挂到低一级的free area
+		if (!page || b->free_area[o].nr_free == 0)
+			continue;
 
-				// 1.计算高半部分buddy的地址
-				// 2.初始化此buddy的order、is_free、refcount
-				// 3.将高半部分挂到低一级的free area
-				// 4.更新当前块的order
-				// 5.o减1，继续循环，直到o等于order
-				while (o > order)
-				{
-					struct page *buddy = find_buddy_m2(page, o - 1, b);
-					if (buddy < page || buddy >= b->pages + b->nr_pages)
-						return NULL;
-					buddy->order = o - 1;
-					buddy->is_free = true;
-					buddy->refcount = 0;
-					
-					page->buddy_next = buddy;
-					// 更新当前块的order
-					page->order = o - 1;
-					
-					// 把拆分后的page挂到低一级free area的头部
-					buddy->buddy_next = b->free_area[o - 1].head;
-					b->free_area[o - 1].head = buddy;
-					b->free_area[o - 1].nr_free ++;
-					b->split_count ++;
-	
-					if(o - 1  == order)
-					{
-						b->free_count -= (1UL << order);
-						page->is_free = false;
-						page->refcount = 1;
-						page->buddy_next = NULL;
-						return page;
-					}
-					o --;
-				}
-			}
+		/* 如果 free_area 里的块头不合法，先不要改状态。 */
+		if (!block_valid(b, page, o))
+			return NULL;
+
+		b->free_area[o].head = page->buddy_next;
+		b->free_area[o].nr_free--;
+
+		/*
+		 * 只把高半挂到低一级 free_area；
+		 * 低半 page 保持为候选，不进入任何 free list。
+		 */
+		while (o > order) {
+			struct page *buddy = page + (1UL << (o - 1));
+
+			free_list_push(b, buddy, o - 1);
+			page->order = o - 1;
+			b->split_count++;
+			o--;
 		}
+
+		page->order = order;
+		page->is_free = false;
+		page->refcount = 1;
+		page->buddy_next = NULL;
+		b->free_count -= (1UL << order);
+		return page;
 	}
 
 	return NULL;
@@ -181,105 +198,77 @@ struct page *buddy_alloc(struct buddy *b, unsigned int order)
 
 int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 {
-	(void)b;
-	(void)page;
-	(void)order;
+	unsigned long index;
+	unsigned int cur;
 
-	if(!b || !page || order > b->max_order)
+	if (!b || !page || order > b->max_order)
 		return -EINVAL;
-	if(page < b->pages || page >= b->pages + b->nr_pages)
+	if (!block_valid(b, page, order))
 		return -EINVAL;
-	if(((unsigned long)(page - b->pages) & ((1UL << order) - 1)) != 0)
+	if (page->order != order || page->is_free || page->refcount != 1)
 		return -EINVAL;
-	if(page->order != order || page->is_free || page->refcount != 1)
-		return -EINVAL;
+
+	/*
+	 * 预检整条合并链：如果某个 buddy 标记为 free，但实际不在
+	 * free_area 里，就直接返回 -EINVAL，不修改 page/free_count。
+	 */
+	index = page_index(b, page);
+	for (cur = order; cur < b->max_order; cur++) {
+		unsigned long buddy_index = index ^ (1UL << cur);
+		struct page *buddy;
+
+		if (buddy_index >= b->nr_pages)
+			break;
+
+		buddy = &b->pages[buddy_index];
+		if (buddy->order != cur || !buddy->is_free)
+			break;
+		if (!free_list_contains(b, buddy, cur))
+			return -EINVAL;
+
+		if (buddy_index < index)
+			index = buddy_index;
+	}
 
 	page->is_free = true;
 	page->refcount = 0;
 	b->free_count += (1UL << order);
 
-	struct page *buddy;
-	while(order < b->max_order)
-	{
-		buddy = find_buddy_m2(page, order, b);
-		// 判断buddy page是否在buddy系统的pages范围内，是否是空闲块，是否与page同order
-		if(buddy < b->pages || buddy >= b->pages + b->nr_pages)
+	index = page_index(b, page);
+	cur = order;
+	while (cur < b->max_order) {
+		unsigned long buddy_index = index ^ (1UL << cur);
+		struct page *buddy;
+		struct page *low;
+		struct page *high;
+
+		if (buddy_index >= b->nr_pages)
 			break;
 
-		// 如果buddy与page同order，说明有机会合并，判断buddy是否在空闲链表中，如果在，则合并，否则无法合并，挂回当前order的free area
-		if(buddy->order == order)
-		{
-			// 无法继续合并，将page挂回当前order的free area的头部
-			if(buddy->is_free == false )
-			{
-				// 此处并没有按照地址高低顺序插入free area链表，而是直接插入到链表头部，可能会导致链表顺序混乱，但不影响功能
-				page->buddy_next = b->free_area[order].head;
-				b->free_area[order].head = page;
-				b->free_area[order].nr_free ++;
-				return 0;
-			}
-			else
-			{
-				// buddy是空闲块，可以合并
+		buddy = &b->pages[buddy_index];
+		if (buddy->order != cur || !buddy->is_free)
+			break;
 
-				struct page *prev = NULL;
-				struct page *curr = b->free_area[order].head;
-				if(!curr)
-					return -EINVAL;
-				
+		/* 预检已保证 buddy 在链表里；这里移除失败说明状态被破坏。 */
+		if (free_list_remove(b, buddy, cur) != 0)
+			return -EINVAL;
 
-				// 遍历当前order的free area链表，找到buddy，并将page和buddy从链表中摘下
-				while(curr)
-				{
-					if(curr == buddy)
-					{
-						if(prev)
-						{
-							// prev != NULL，说明buddy不是free area链表的头部，将page和buddy从free area链表中摘下
-							prev->buddy_next = buddy->buddy_next;
-						}
-						else
-						{
-							// prev == NULL， 说明buddy是free area链表的头部，将buddy摘下，buddy->buddy_next作为free area的头部
-							b->free_area[order].head = buddy->buddy_next;
-						}
-						// order++，继续向上合并
-						b->free_area[order].nr_free --;
-						b->merge_count ++;
-
-						page->order ++;
-						// 如果buddy的地址大于page的地址，则将buddy的内容拷贝到page中，page指向buddy，继续向上查找buddy
-						// 这样做的目的是为了保证page指向合并后的块的起始地址，方便后续的合并操作
-						if(page > buddy)
-						{
-							page = merge_page_metadata(buddy, page);
-						}
-						order ++;
-						break;
-					}
-					prev = curr;
-					curr = curr->buddy_next;
-				}
-			}
-		}
-		else
-		{
-			// buddy与page不同order，无法合并，将page挂回当前order的free area的头部
-			page->buddy_next = b->free_area[order].head;
-			b->free_area[order].head = page;
-			b->free_area[order].nr_free ++;
-			return 0;
+		if (buddy_index < index) {
+			low = buddy;
+			high = &b->pages[index];
+			index = buddy_index;
+		} else {
+			low = &b->pages[index];
+			high = buddy;
 		}
 
-	}
-	if(order == b->max_order)
-	{
-		// 如果已经合并到最大order，则将page挂回当前order的free area
-		page->buddy_next = b->free_area[order].head;
-		b->free_area[order].head = page;
-		b->free_area[order].nr_free ++;
+		merge_page_pair(low, high);
+		page = low;
+		cur++;
+		b->merge_count++;
 	}
 
+	free_list_push(b, page, cur);
 	return 0;
 }
 
@@ -303,18 +292,9 @@ int buddy_check(const struct buddy *b)
 		unsigned long blocks = 0;
 
 		while (p) {
-			unsigned long index;
-
-			// 判断 p 是否在 pages 范围内
-			if (p < b->pages || p >= b->pages + b->nr_pages)
+			if (!block_valid(b, p, i))
 				return -EINVAL;
-			// 判断 p 是否是空闲块头，p 的 order 是否与 free_area[i] 的 order 匹配，p 的 refcount 是否为 0
 			if (!p->is_free || p->order != i || p->refcount != 0)
-				return -EINVAL;
-
-			index = (unsigned long)(p - b->pages);
-			// 判断 p 是否按 2^i 对齐
-			if ((index & ((1UL << i) - 1)) != 0)
 				return -EINVAL;
 
 			blocks++;

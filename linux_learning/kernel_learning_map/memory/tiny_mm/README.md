@@ -28,7 +28,7 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 
 > M1 已完成：`make test` 11 个测试全部通过。
 >
-> M2a buddy 已完成：`make test-m2` 10 个测试全部通过；M2b pcp / M2c 集成尚未开始。
+> M2a buddy 已完成：`make test-m2` 11 个测试全部通过。
 
 ---
 
@@ -40,7 +40,7 @@ tiny_mm/
 ├── docs/
 │   ├── m0-toolchain.md             # M0：编译、测试、ASan
 │   ├── m1-physical-pages.md        # M1：page/PFN/paddr/zone/pg_data
-│   ├── m2-buddy.md                 # M2：buddy split/merge、10 个测试
+│   ├── m2-buddy.md                 # M2a：buddy split/merge、11 个测试
 │   ├── tiny_mm_learning_framework.md # M0–M9 完整框架
 │   └── memory_capstone_tiny_mm.md  # 最初的项目方案
 ├── include/
@@ -52,8 +52,8 @@ tiny_mm/
 ├── tests/
 │   ├── test_runner.h               # M1 测试 runner
 │   ├── test_pmm.c                  # M1 的 11 个验收测试
-│   ├── test_runner_buddy.h         # M2 测试 runner
-│   └── test_buddy.c                # M2 的 10 个验收测试
+│   ├── test_runner_buddy.h         # M2a 测试 runner
+│   └── test_buddy.c                # M2a 的 11 个验收测试
 ├── reports/
 │   ├── M1.md                       # M1 阶段报告模板
 │   └── M2.md                       # M2 阶段报告模板
@@ -161,7 +161,7 @@ M2a 先做成独立模块，不改 M1 的 `pmm.c`：
 
 - `include/buddy.h`：`free_area`、`struct buddy`、API；
 - `src/buddy.c`：`buddy_init()`/`buddy_check()`/`buddy_alloc()`/`buddy_free()` 已实现；
-- `tests/test_buddy.c`：10 个测试，当前全部通过。
+- `tests/test_buddy.c`：11 个测试，当前全部通过。
 
 运行：
 

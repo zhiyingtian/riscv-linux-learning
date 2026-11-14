@@ -87,10 +87,12 @@ static int test_split(void)
 static int test_merge(void)
 {
 	struct page *p;
+	struct page *high;
 
 	CHECK(buddy_init(&b, pages, TEST_NR_PAGES) == 0);
 	p = buddy_alloc(&b, 2);
 	CHECK(p != NULL);
+	high = p + (1UL << 2);
 	CHECK(buddy_free(&b, p, 2) == 0);
 
 	/* 释放后应一路合并回一个 order 8 的整块。 */
@@ -99,6 +101,11 @@ static int test_merge(void)
 	CHECK(b.free_area[2].nr_free == 0);
 	CHECK(b.merge_count > 0);
 	CHECK(b.free_count == TEST_NR_PAGES);
+
+	/* 被合并的高半不再是空闲块头，元数据必须被清理。 */
+	CHECK(high->is_free == false);
+	CHECK(high->order == 0);
+	CHECK(high->buddy_next == NULL);
 	CHECK(buddy_check(&b) == 0);
 	return 0;
 }
@@ -147,6 +154,43 @@ static int test_exhaust(void)
 	for (i = 0; i < TEST_NR_PAGES; i++) {
 		CHECK(buddy_free(&b, ptrs[i], 0) == 0);
 	}
+	CHECK(b.free_count == TEST_NR_PAGES);
+	CHECK(buddy_check(&b) == 0);
+	return 0;
+}
+
+static int test_rollback(void)
+{
+	struct page *p;
+	struct page *buddy;
+	struct page **link;
+	unsigned long free_before;
+
+	CHECK(buddy_init(&b, pages, TEST_NR_PAGES) == 0);
+	p = buddy_alloc(&b, 1);
+	CHECK(p != NULL);
+	buddy = p + 2;
+
+	/* 人为制造“buddy 标记 free，但不在 free_area 链表里”的坏状态。 */
+	link = &b.free_area[1].head;
+	while (*link && *link != buddy)
+		link = &(*link)->buddy_next;
+	CHECK(*link == buddy);
+	*link = buddy->buddy_next;
+	b.free_area[1].nr_free--;
+	buddy->buddy_next = NULL;
+
+	free_before = b.free_count;
+	CHECK(buddy_free(&b, p, 1) < 0);
+	CHECK(b.free_count == free_before);
+	CHECK(p->is_free == false);
+	CHECK(p->refcount == 1);
+
+	/* 恢复坏状态对应的链表，再正常释放，确认状态可以恢复。 */
+	buddy->buddy_next = b.free_area[1].head;
+	b.free_area[1].head = buddy;
+	b.free_area[1].nr_free++;
+	CHECK(buddy_free(&b, p, 1) == 0);
 	CHECK(b.free_count == TEST_NR_PAGES);
 	CHECK(buddy_check(&b) == 0);
 	return 0;
@@ -246,6 +290,7 @@ int main(void)
 	failures += run_test("wrong order", test_wrong_order);
 	failures += run_test("exhaust", test_exhaust);
 	failures += run_test("invalid", test_invalid);
+	failures += run_test("bad free-list rollback", test_rollback);
 	failures += run_test("random stress", test_random_stress);
 	printf("---------------------------------\n");
 
