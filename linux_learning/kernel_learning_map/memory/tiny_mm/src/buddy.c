@@ -8,20 +8,19 @@
 
 #include <errno.h>
 #include <string.h>
-#include <assert.h>
 #include "../include/buddy.h"
 
-static int page_to_pfn_m2(const struct page *page, const struct buddy *b)
+static unsigned long page_to_pfn_m2(const struct page *page, const struct buddy *b)
 {
-	return (int)(page - b->pages);
+	return (unsigned long)(page - b->pages);
 }
 
-static struct page *pfn_to_page_m2(int pfn, const struct buddy *b)
+static struct page *pfn_to_page_m2(unsigned long pfn, const struct buddy *b)
 {
 	return &b->pages[pfn];
 }
 
-static int find_buddy_pfn_m2(struct page *page, unsigned int order, const struct buddy *b)
+static unsigned long find_buddy_pfn_m2(struct page *page, unsigned int order, const struct buddy *b)
 {
 	return page_to_pfn_m2(page, b) ^ (1UL << order);
 }
@@ -94,6 +93,20 @@ void buddy_exit(struct buddy *b)
 		memset(b, 0, sizeof(*b));
 }
 
+struct page *merge_page_metadata(struct page *buddy, struct page *page)
+{
+	buddy->order = page->order;
+	buddy->is_free = page->is_free;
+	buddy->refcount = page->refcount;
+	buddy->buddy_next = page->buddy_next;
+	buddy->flags = page->flags;
+	buddy->zone_id = page->zone_id;
+	
+	page->buddy_next = NULL;
+
+	return buddy;
+}
+
 struct page *buddy_alloc(struct buddy *b, unsigned int order)
 {
 	if(!b || order > b->max_order)
@@ -104,12 +117,23 @@ struct page *buddy_alloc(struct buddy *b, unsigned int order)
 		if(b->free_area[o].head != NULL && b->free_area[o].nr_free > 0)
 		{
 			
-			// 当前order的free area不满足所申请的pages，向上查找，如找到则拆分处理
-			while(o > order)
+			struct page *page = b->free_area[o].head;
+			// 如果当前order等于请求的order，则直接分配该块
+			if(o == order)
 			{
-				struct page *p = b->free_area[o].head;
-				// 将当前order的free area的头部空闲块摘下，更新当前order free area的head，指向p的下一个空闲块
-				b->free_area[o].head = p->buddy_next;
+				b->free_area[o].head = page->buddy_next;
+				b->free_area[o].nr_free --;
+				b->free_count -= (1UL << order);
+				page->is_free = false;
+				page->refcount = 1;
+				page->buddy_next = NULL;
+				return page;
+			}
+			// 当前order的free area不满足所申请的pages，向上查找，如找到则拆分处理
+			else
+			{
+				// 将当前order的free area的头部空闲块摘下，更新当前order free area的head，指向page的下一个空闲块
+				b->free_area[o].head = page->buddy_next;
 				b->free_area[o].nr_free --;
 
 				// 将当前块拆分为两个order-1的块，低半部分继续作为候选，高半部分挂到低一级的free area
@@ -119,37 +143,35 @@ struct page *buddy_alloc(struct buddy *b, unsigned int order)
 				// 3.将高半部分挂到低一级的free area
 				// 4.更新当前块的order
 				// 5.o减1，继续循环，直到o等于order
-				struct page *buddy = find_buddy_m2(p, o - 1, b);
-				buddy->order = o - 1;
-				buddy->is_free = true;
-				buddy->refcount = 0;
-				
-				// 姑且先把拆封后的page挂到低一级free area的头部（此时并free area链表并没有按照地址顺序排列）
-				p->buddy_next = buddy;
-				buddy->buddy_next = b->free_area[o - 1].head;
-				b->free_area[o - 1].head = p;
-				b->free_area[o - 1].nr_free += 2;
-				b->split_count ++;
-
-				// 更新当前块的order
-				p->order = o - 1;
-				// 更新当前order free area的head，指向p的下一个空闲块、
-				// 这部分操作必须放到操作完p之q前，否则p更新的是buddy_next，导致链表断裂
-				
-				o --;
-			}
-			// 如果当前order等于请求的order，则直接分配该块
-			if(o == order)
-			{
-				// 指针p指向伙伴系统在当前order下的free area中的第一个空闲块
-				struct page *p = b->free_area[o].head;
-				b->free_area[o].head = p->buddy_next;
-				b->free_area[o].nr_free --;
-				b->free_count -= (1UL << order);
-				p->is_free = false;
-				p->refcount = 1;
-				p->buddy_next = NULL;
-				return p;
+				while (o > order)
+				{
+					struct page *buddy = find_buddy_m2(page, o - 1, b);
+					if (buddy < page || buddy >= b->pages + b->nr_pages)
+						return NULL;
+					buddy->order = o - 1;
+					buddy->is_free = true;
+					buddy->refcount = 0;
+					
+					page->buddy_next = buddy;
+					// 更新当前块的order
+					page->order = o - 1;
+					
+					// 把拆分后的page挂到低一级free area的头部
+					buddy->buddy_next = b->free_area[o - 1].head;
+					b->free_area[o - 1].head = buddy;
+					b->free_area[o - 1].nr_free ++;
+					b->split_count ++;
+	
+					if(o - 1  == order)
+					{
+						b->free_count -= (1UL << order);
+						page->is_free = false;
+						page->refcount = 1;
+						page->buddy_next = NULL;
+						return page;
+					}
+					o --;
+				}
 			}
 		}
 	}
@@ -202,7 +224,9 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 
 				struct page *prev = NULL;
 				struct page *curr = b->free_area[order].head;
-				assert(curr != NULL && "buddy free area is empty, but buddy is free");
+				if(!curr)
+					return -EINVAL;
+				
 
 				// 遍历当前order的free area链表，找到buddy，并将page和buddy从链表中摘下
 				while(curr)
@@ -228,9 +252,7 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 						// 这样做的目的是为了保证page指向合并后的块的起始地址，方便后续的合并操作
 						if(page > buddy)
 						{
-							memcpy(buddy, page, sizeof(struct page));
-							page->buddy_next = NULL;
-							page = buddy;
+							page = merge_page_metadata(buddy, page);
 						}
 						order ++;
 						break;
