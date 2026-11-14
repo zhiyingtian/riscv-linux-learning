@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/linux_learning/kernel_learning_map/memory/tiny_mm/build-debug/test_buddy",
             "args": [],
-            "stopAtEntry": true,
+            "stopAtEntry": false,
             "cwd": "${workspaceFolder}/linux_learning/kernel_learning_map/memory/tiny_mm",
             "environment": [],
             "externalConsole": false,
