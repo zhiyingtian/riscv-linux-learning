@@ -155,6 +155,8 @@ static int test_exhaust(void)
 static int test_invalid(void)
 {
 	struct buddy bad;
+	struct page *p;
+	struct page *unaligned;
 
 	CHECK(buddy_init(NULL, pages, TEST_NR_PAGES) < 0);
 	CHECK(buddy_init(&bad, NULL, TEST_NR_PAGES) < 0);
@@ -165,6 +167,21 @@ static int test_invalid(void)
 	CHECK(buddy_init(&b, pages, TEST_NR_PAGES) == 0);
 	CHECK(buddy_alloc(&b, MAX_ORDER) == NULL);
 	CHECK(buddy_free(&b, NULL, 0) < 0);
+
+	/*
+	 * 未按 2^order 对齐的 page 不能当作块头释放。
+	 * p 是合法的 order-1 块头，p+1 是块内部页。
+	 */
+	p = buddy_alloc(&b, 1);
+	CHECK(p != NULL);
+	unaligned = p + 1;
+	unaligned->order = 1;
+	unaligned->is_free = false;
+	unaligned->refcount = 1;
+	CHECK(buddy_free(&b, unaligned, 1) < 0);
+	CHECK(b.free_count == TEST_NR_PAGES - 2);
+	CHECK(buddy_check(&b) == 0);
+	CHECK(buddy_free(&b, p, 1) == 0);
 	return 0;
 }
 

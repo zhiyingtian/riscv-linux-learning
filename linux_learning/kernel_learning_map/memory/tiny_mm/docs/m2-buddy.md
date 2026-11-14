@@ -4,7 +4,7 @@
 > 上一阶段：[m1-physical-pages.md](m1-physical-pages.md)
 > 完整框架：[tiny_mm_learning_framework.md](tiny_mm_learning_framework.md)
 >
-> **状态：🚧 脚手架已搭好；核心 `buddy_alloc()` / `buddy_free()` 还是 TODO。**
+> **状态：✅ M2a 已完成（`make test-m2` 10/10 pass）；M2b pcp / M2c 集成未开始。**
 
 ## 目标
 
@@ -47,7 +47,7 @@ tests/test_buddy.c
 所以当前：
 
 - `make test` → M1，应该全绿；
-- `make test-m2` → M2，脚手架阶段有 8 个失败；
+- `make test-m2` → M2a，10/10 通过；
 - `make test-all` → 两个都跑。
 
 ## 文件
@@ -55,7 +55,7 @@ tests/test_buddy.c
 | 文件 | 作用 |
 |---|---|
 | [../include/buddy.h](../include/buddy.h) | `free_area`、`struct buddy`、API |
-| [../src/buddy.c](../src/buddy.c) | 初始化/自检已实现，核心函数 TODO |
+| [../src/buddy.c](../src/buddy.c) | M2a 实现（含 split/merge） |
 | [../tests/test_buddy.c](../tests/test_buddy.c) | 10 个验收测试 |
 | [../tests/test_runner_buddy.h](../tests/test_runner_buddy.h) | M2 测试 runner |
 
@@ -88,7 +88,7 @@ struct buddy {
 
 要求 `nr_pages` 是 2 的幂，测试用 256 页、`max_order=8`。
 
-## 需要实现的 TODO
+## 实现要点（M2a 已完成）
 
 ### 1. `buddy_alloc(b, order)`
 
@@ -151,19 +151,18 @@ static int free_list_remove(struct buddy *b, struct page *p, unsigned order);
 | `double free` | 第二次 free 返回错误，不重复计数 |
 | `wrong order` | 分配 order 0 却按 order 1 释放，必须拒绝 |
 | `exhaust` | 256 个 order 0 全部分配，再全部释放 |
-| `invalid` | NULL/非 2 的幂/order 越界 |
+| `invalid` | NULL/非 2 的幂/order 越界/未对齐 page |
 | `random stress` | 2 万次随机 alloc/free，最终回到满空闲 |
 
-脚手架阶段预期：
+脚手架刚搭好时是 8 个失败；实现完成后应全部通过：
 
 ```text
 [PASS] init
-[FAIL] alloc order 0
+[PASS] alloc order 0
 ...
-[PASS] invalid
-[FAIL] random stress
+[PASS] random stress
 
-8 test(s) failed
+all tests passed
 ```
 
 ## 运行
@@ -171,8 +170,8 @@ static int free_list_remove(struct buddy *b, struct page *p, unsigned order);
 ```bash
 cd linux_learning/kernel_learning_map/memory/tiny_mm
 
-make test        # M1，应该全绿
-make test-m2     # M2，当前 8 个失败
+make test        # M1，11/11
+make test-m2     # M2，10/10
 make test-all    # 两个都跑
 ```
 
@@ -215,7 +214,7 @@ all tests passed
 2. **合并错半区**：把 `buddy_index = index ^ (1 << order)` 改成固定 `index + (1 << order)` → `random stress`/`merge` 失败；
 3. **split 挂错高半**：高半地址算错 → `alloc order 2`/`split` 失败；
 4. **忘记减/加 free_count** → `alloc order 0`/`exhaust` 失败；
-5. **不检查对齐**：删掉对齐检查 → `wrong order`/`invalid` 可能失败；
+5. **不检查对齐**：删掉对齐检查 → `invalid` 的未对齐 page 用例失败；
 6. **不检查 double free**：删掉 `page->is_free`/`refcount` 检查 → `double free` 失败。
 
 每次恢复代码再跑全绿。

@@ -23,12 +23,12 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 |---|---|---|
 | M0 工具链/测试框架 | ✅ 已搭好 | [docs/m0-toolchain.md](docs/m0-toolchain.md) |
 | M1 物理页模型 | ✅ 已完成（56a96a7） | [docs/m1-physical-pages.md](docs/m1-physical-pages.md) |
-| M2 buddy/pcp | 🚧 脚手架已搭好（buddy TODO） | [docs/m2-buddy.md](docs/m2-buddy.md) |
+| M2 buddy/pcp | ✅ M2a buddy 已完成（10/10） | [docs/m2-buddy.md](docs/m2-buddy.md) |
 | M3 页表/TLB | 未开始 | 框架里的 M3 |
 
 > M1 已完成：`make test` 11 个测试全部通过。
 >
-> M2 脚手架已搭好：`make test-m2` 目前是 8 个失败（等 `buddy_alloc`/`buddy_free`）。
+> M2a buddy 已完成：`make test-m2` 10 个测试全部通过；M2b pcp / M2c 集成尚未开始。
 
 ---
 
@@ -48,7 +48,7 @@ tiny_mm/
 │   └── buddy.h                     # M2 buddy 数据结构/API
 ├── src/
 │   ├── pmm.c                       # 物理页实现（M1 已完成）
-│   └── buddy.c                     # M2 buddy（核心 TODO）
+│   └── buddy.c                     # M2 buddy（已完成）
 ├── tests/
 │   ├── test_runner.h               # M1 测试 runner
 │   ├── test_pmm.c                  # M1 的 11 个验收测试
@@ -69,7 +69,7 @@ tiny_mm/
 cd linux_learning/kernel_learning_map/memory/tiny_mm
 make
 make test        # M1，11/11 通过
-make test-m2     # M2，脚手架阶段 8 个失败
+make test-m2     # M2a，10/10 通过
 make test-all    # 两个都跑
 ```
 
@@ -155,13 +155,13 @@ all tests passed
 
 ---
 
-## M2 脚手架：buddy
+## M2a：buddy 已完成
 
-M2 先做成独立模块，不改 M1 的 `pmm.c`：
+M2a 先做成独立模块，不改 M1 的 `pmm.c`：
 
 - `include/buddy.h`：`free_area`、`struct buddy`、API；
-- `src/buddy.c`：`buddy_init()`/`buddy_check()` 已实现，`buddy_alloc()`/`buddy_free()` 是 TODO；
-- `tests/test_buddy.c`：10 个测试，脚手架阶段 `init` 和 `invalid` 通过，其余 8 个失败。
+- `src/buddy.c`：`buddy_init()`/`buddy_check()`/`buddy_alloc()`/`buddy_free()` 已实现；
+- `tests/test_buddy.c`：10 个测试，当前全部通过。
 
 运行：
 
@@ -173,18 +173,18 @@ make test-m2
 
 ```text
 [PASS] init
-[FAIL] alloc order 0
+[PASS] alloc order 0
 ...
-[FAIL] random stress
+[PASS] random stress
 
-8 test(s) failed
+all tests passed
 ```
 
 详细 split/merge 步骤、测试表、bug 注入和 Linux 对照：
 
 - [docs/m2-buddy.md](docs/m2-buddy.md)
 
-M2 通过后填 [reports/M2.md](reports/M2.md)，再加 pcp（M2b）。
+填 [reports/M2.md](reports/M2.md)，再做 M2b 的 pcp。
 
 ---
 

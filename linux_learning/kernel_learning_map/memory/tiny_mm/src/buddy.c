@@ -8,6 +8,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <assert.h>
 #include "../include/buddy.h"
 
 static int page_to_pfn_m2(const struct page *page, const struct buddy *b)
@@ -95,16 +96,6 @@ void buddy_exit(struct buddy *b)
 
 struct page *buddy_alloc(struct buddy *b, unsigned int order)
 {
-	/*
-	 * TODO(M2):
-	 *   1. 校验 b/order；
-	 *   2. 从 order 开始向上找第一个非空 free_area；
-	 *   3. 从该 free_area 摘下一个块；
-	 *   4. 不断二分：低半继续作为候选，高半挂到低一级 free_area；
-	 *   5. 最终低半就是分配结果；
-	 *   6. 更新 page 字段和 free_count。
-	 */
-
 	if(!b || order > b->max_order)
 		return NULL;
 
@@ -157,6 +148,7 @@ struct page *buddy_alloc(struct buddy *b, unsigned int order)
 				b->free_count -= (1UL << order);
 				p->is_free = false;
 				p->refcount = 1;
+				p->buddy_next = NULL;
 				return p;
 			}
 		}
@@ -171,17 +163,11 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 	(void)page;
 	(void)order;
 
-	/*
-	 * TODO(M2):
-	 *   1. 校验 b/page/order、page 对齐、page 状态；
-	 *   2. 把 page 标记为空闲块；
-	 *   3. 循环找 buddy：page 与 buddy 必须同 order 且 buddy 在空闲链表里；
-	 *   4. 合并后继续向上，直到不能合并；
-	 *   5. 把最终块挂回对应 free_area，更新 free_count。
-	 */
 	if(!b || !page || order > b->max_order)
 		return -EINVAL;
 	if(page < b->pages || page >= b->pages + b->nr_pages)
+		return -EINVAL;
+	if(((unsigned long)(page - b->pages) & ((1UL << order) - 1)) != 0)
 		return -EINVAL;
 	if(page->order != order || page->is_free || page->refcount != 1)
 		return -EINVAL;
@@ -198,56 +184,30 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 		if(buddy < b->pages || buddy >= b->pages + b->nr_pages)
 			break;
 
-		// 如果buddy不在空闲链表中，无法合并，直接挂回当前order的free area
+		// 如果buddy与page同order，说明有机会合并，判断buddy是否在空闲链表中，如果在，则合并，否则无法合并，挂回当前order的free area
 		if(buddy->order == order)
 		{
+			// 无法继续合并，将page挂回当前order的free area的头部
 			if(buddy->is_free == false )
 			{
-				// 无法继续合并，将page挂回当前order的free area
-
-				// 在buddy page前插入page
-				struct page *prev = NULL;
-				struct page *curr = b->free_area[order].head;
-				if(curr == NULL)
-				{
-					// 空闲的free area list
-					b->free_area[order].head = page;
-					page->buddy_next = NULL;
-					b->free_area[order].nr_free ++;
-					return 0;
-				}
-				while(curr)
-				{
-					if(curr == buddy)
-					{
-						if(prev)
-						{
-							// prev != NULL，说明buddy不是free area链表的头部，将page插入到buddy前面
-							prev->buddy_next = page;
-							page->buddy_next = buddy;
-						}
-						else
-						{
-							// prev == NULL， 说明buddy是free area链表的头部，将page插入到buddy前面
-							page->buddy_next = buddy;
-							b->free_area[order].head = page;
-						}
-						b->free_area[order].nr_free ++;
-						break;
-					}
-					prev = curr;
-					curr = curr->buddy_next;
-				}
+				// 此处并没有按照地址高低顺序插入free area链表，而是直接插入到链表头部，可能会导致链表顺序混乱，但不影响功能
+				page->buddy_next = b->free_area[order].head;
+				b->free_area[order].head = page;
+				b->free_area[order].nr_free ++;
+				return 0;
 			}
 			else
 			{
 				// buddy是空闲块，可以合并
+
 				struct page *prev = NULL;
 				struct page *curr = b->free_area[order].head;
+				assert(curr != NULL && "buddy free area is empty, but buddy is free");
 
+				// 遍历当前order的free area链表，找到buddy，并将page和buddy从链表中摘下
 				while(curr)
 				{
-					if(find_buddy_m2(page, order, b) == buddy)
+					if(curr == buddy)
 					{
 						if(prev)
 						{
@@ -262,7 +222,16 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 						// order++，继续向上合并
 						b->free_area[order].nr_free --;
 						b->merge_count ++;
+
 						page->order ++;
+						// 如果buddy的地址大于page的地址，则将buddy的内容拷贝到page中，page指向buddy，继续向上查找buddy
+						// 这样做的目的是为了保证page指向合并后的块的起始地址，方便后续的合并操作
+						if(page > buddy)
+						{
+							memcpy(buddy, page, sizeof(struct page));
+							page->buddy_next = NULL;
+							page = buddy;
+						}
 						order ++;
 						break;
 					}
@@ -270,6 +239,14 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 					curr = curr->buddy_next;
 				}
 			}
+		}
+		else
+		{
+			// buddy与page不同order，无法合并，将page挂回当前order的free area的头部
+			page->buddy_next = b->free_area[order].head;
+			b->free_area[order].head = page;
+			b->free_area[order].nr_free ++;
+			return 0;
 		}
 
 	}
