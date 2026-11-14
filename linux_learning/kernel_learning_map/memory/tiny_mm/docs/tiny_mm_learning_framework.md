@@ -156,7 +156,7 @@ tiny_mm/
 
 > 当前脚手架：先做独立 `buddy.c`（M2a），再加 pcp（M2b），最后把 `pmm.c` 的 bitmap 切到 buddy（M2c）。
 >
-> 入口：[m2-buddy.md](m2-buddy.md)
+> 入口：[m2-buddy.md](m2-buddy.md) · [m2b-pcp.md](m2b-pcp.md)
 
 **知识点**
 

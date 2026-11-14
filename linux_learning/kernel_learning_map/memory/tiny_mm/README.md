@@ -23,12 +23,14 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 |---|---|---|
 | M0 工具链/测试框架 | ✅ 已搭好 | [docs/m0-toolchain.md](docs/m0-toolchain.md) |
 | M1 物理页模型 | ✅ 已完成（56a96a7） | [docs/m1-physical-pages.md](docs/m1-physical-pages.md) |
-| M2 buddy/pcp | ✅ M2a buddy 已完成（10/10） | [docs/m2-buddy.md](docs/m2-buddy.md) |
+| M2 buddy/pcp | 🚧 M2a 完成；M2b pcp 脚手架 | [docs/m2-buddy.md](docs/m2-buddy.md) · [docs/m2b-pcp.md](docs/m2b-pcp.md) |
 | M3 页表/TLB | 未开始 | 框架里的 M3 |
 
 > M1 已完成：`make test` 11 个测试全部通过。
 >
 > M2a buddy 已完成：`make test-m2` 11 个测试全部通过。
+>
+> M2b pcp 脚手架已搭好：`make test-m2b` 目前 7 个失败。
 
 ---
 
@@ -41,22 +43,28 @@ tiny_mm/
 │   ├── m0-toolchain.md             # M0：编译、测试、ASan
 │   ├── m1-physical-pages.md        # M1：page/PFN/paddr/zone/pg_data
 │   ├── m2-buddy.md                 # M2a：buddy split/merge、11 个测试
+│   ├── m2b-pcp.md                  # M2b：pcp refill/high/drain、9 个测试
 │   ├── tiny_mm_learning_framework.md # M0–M9 完整框架
 │   └── memory_capstone_tiny_mm.md  # 最初的项目方案
 ├── include/
 │   ├── tmm.h                       # 数据结构与 API
-│   └── buddy.h                     # M2 buddy 数据结构/API
+│   ├── buddy.h                     # M2a buddy 数据结构/API
+│   └── pcp.h                       # M2b pcp 数据结构/API
 ├── src/
 │   ├── pmm.c                       # 物理页实现（M1 已完成）
-│   └── buddy.c                     # M2 buddy（已完成）
+│   ├── buddy.c                     # M2a buddy（已完成）
+│   └── pcp.c                       # M2b pcp（核心 TODO）
 ├── tests/
 │   ├── test_runner.h               # M1 测试 runner
 │   ├── test_pmm.c                  # M1 的 11 个验收测试
 │   ├── test_runner_buddy.h         # M2a 测试 runner
-│   └── test_buddy.c                # M2a 的 11 个验收测试
+│   ├── test_buddy.c                # M2a 的 11 个验收测试
+│   ├── test_runner_pcp.h           # M2b 测试 runner
+│   └── test_pcp.c                  # M2b 的 9 个验收测试
 ├── reports/
 │   ├── M1.md                       # M1 阶段报告模板
-│   └── M2.md                       # M2 阶段报告模板
+│   ├── M2.md                       # M2a 阶段报告
+│   └── M2b.md                      # M2b 阶段报告模板
 ├── Makefile
 └── .gitignore
 ```
@@ -69,8 +77,9 @@ tiny_mm/
 cd linux_learning/kernel_learning_map/memory/tiny_mm
 make
 make test        # M1，11/11 通过
-make test-m2     # M2a，10/10 通过
-make test-all    # 两个都跑
+make test-m2     # M2a，11/11 通过
+make test-m2b    # M2b，脚手架阶段 7 个失败
+make test-all    # 三个都跑
 ```
 
 默认带 ASan/UBSan。没有 sanitizer 的环境：
@@ -97,6 +106,7 @@ all tests passed
 
 仓库根目录的 `.vscode/launch.json` 已经加了 tiny-mm 的 gdb 配置：
 
+- `tiny-mm: debug M2b pcp`
 - `tiny-mm: debug M2 buddy`
 - `tiny-mm: debug M1 pmm`
 
@@ -104,7 +114,7 @@ all tests passed
 
 1. 安装 VS Code 的 **C/C++** 扩展；
 2. 打开 `src/buddy.c`，在 `buddy_alloc()` / `buddy_free()` 里打断点；
-3. 按 `F5`，选择 `tiny-mm: debug M2 buddy`；
+3. 按 `F5`，选择 `tiny-mm: debug M2b pcp` 或 `tiny-mm: debug M2 buddy`；
 4. 启动前会自动执行任务 `tiny-mm: build M2 (debug)`。
 
 调试构建使用独立的 `build-debug/`，并且**关闭 ASan/UBSan**，避免 sanitizer 干扰 gdb：
@@ -118,6 +128,8 @@ program = build-debug/test_buddy
 手动构建：
 
 ```bash
+make debug-m2b
+# 或
 make debug-m2
 # 或
 make debug-m1
@@ -188,11 +200,45 @@ all tests passed
 
 ---
 
+## M2b 脚手架：pcp
+
+M2b 在 buddy 上加一层 order-0 的 per-CPU page cache：
+
+- `include/pcp.h`：`struct pcp`、API；
+- `src/pcp.c`：`pcp_init()`/`pcp_check()` 已实现，`pcp_alloc_pages()`/`pcp_free_pages()`/`pcp_drain()` 是 TODO；
+- `tests/test_pcp.c`：9 个测试，脚手架阶段 `init`/`invalid` 通过，其余 7 个失败。
+
+运行：
+
+```bash
+make test-m2b
+```
+
+预期：
+
+```text
+[PASS] init
+[FAIL] refill
+...
+[FAIL] random stress
+
+7 test(s) failed
+```
+
+详细 refill/high/drain 步骤、测试表、bug 注入和 Linux 对照：
+
+- [docs/m2b-pcp.md](docs/m2b-pcp.md)
+
+M2b 通过后填 [reports/M2b.md](reports/M2b.md)，再进入 M2c：把 `pmm.c` 的 bitmap 换成 buddy + pcp。
+
+---
+
 ## 文档入口
 
 - [M0：工具链与测试框架](docs/m0-toolchain.md)
 - [M1：物理地址模型](docs/m1-physical-pages.md)
-- [M2：buddy 分配器](docs/m2-buddy.md)
+- [M2a：buddy 分配器](docs/m2-buddy.md)
+- [M2b：pcp](docs/m2b-pcp.md)
 - [tiny-mm 完整学习框架](docs/tiny_mm_learning_framework.md)
 - [最初的项目方案](docs/memory_capstone_tiny_mm.md)
 
