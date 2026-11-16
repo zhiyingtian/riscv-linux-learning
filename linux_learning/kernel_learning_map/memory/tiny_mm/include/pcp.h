@@ -17,8 +17,8 @@
  *
  * pcp 页不在 buddy 的 free_area 里，所以它们对 buddy 来说仍是“已分配”：
  *   - pcp 链表用 page->buddy_next 串起来；
- *   - pcp 里的 page：is_free=false、refcount=0、order=0；
- *   - 从 pcp 取出后：is_free=false、refcount=1、order=0。
+ *   - pcp 里的 page：is_free=false、refcount=0、order=0、state=PAGE_IN_PCP；
+ *   - 从 pcp 取出后：is_free=false、refcount=1、order=0、state=PAGE_ALLOCATED。
  */
 struct pcp {
 	struct buddy *buddy;	/* 下层 buddy，不拥有 */
@@ -30,7 +30,7 @@ struct pcp {
 	unsigned long alloc_hits;	/* 从 pcp 命中的次数 */
 	unsigned long alloc_refills;	/* pcp 为空、refill 的次数 */
 	unsigned long alloc_misses;	/* buddy 也拿不到页的次数 */
-	unsigned long free_count;	/* 放进 pcp 的页数 */
+	unsigned long nr_put;	/* 累计放进 pcp 的页数（refill + free） */
 	unsigned long drain_count;	/* 从 pcp 还给 buddy 的页数 */
 };
 
@@ -54,7 +54,7 @@ void pcp_exit(struct pcp *p);
  * order == 0：优先 pcp；pcp 空则从 buddy refill。
  * order > 0：直接 buddy_alloc()，不经过 pcp。
  *
- * 成功返回块首页；失败返回 NULL。
+ * 成功返回块首页；失败返回 NULL。order > 0 时返回 buddy 的已分配页。
  */
 struct page *pcp_alloc_pages(struct pcp *p, unsigned int order);
 
@@ -80,7 +80,7 @@ unsigned int pcp_drain_all(struct pcp *p);
 /*
  * 自检：
  *   - count 与链表长度一致；
- *   - 每个缓存页在 buddy->pages 范围内，且 is_free/refcount/order 正确；
+ *   - 每个缓存页在 buddy->pages 范围内，且 is_free/refcount/order/state 正确；
  *   - buddy_check() 通过。
  */
 int pcp_check(const struct pcp *p);

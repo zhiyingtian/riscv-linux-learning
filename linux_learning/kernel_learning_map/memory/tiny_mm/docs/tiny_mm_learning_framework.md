@@ -154,7 +154,7 @@ tiny_mm/
 
 ### M2：buddy + pcp + 分配策略（3–5 天）
 
-> 当前脚手架：先做独立 `buddy.c`（M2a），再加 pcp（M2b），最后把 `pmm.c` 的 bitmap 切到 buddy（M2c）。
+> 当前进度：M2a buddy 已完成；M2b pcp 已完成；下一步 M2c，把 `pmm.c` 的 bitmap 切到 buddy + pcp。
 >
 > 入口：[m2-buddy.md](m2-buddy.md) · [m2b-pcp.md](m2b-pcp.md)
 

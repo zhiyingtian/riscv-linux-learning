@@ -40,12 +40,15 @@ static int test_refill(void)
 	CHECK(page->order == 0);
 	CHECK(page->refcount == 1);
 	CHECK(page->is_free == false);
+	CHECK(page->state == PAGE_ALLOCATED);
+	CHECK(p.nr_put == TEST_BATCH);
 	CHECK(p.count == TEST_BATCH - 1);
 	CHECK(b.free_count == TEST_NR_PAGES - TEST_BATCH);
 	CHECK(p.alloc_refills == 1);
 	CHECK(pcp_check(&p) == 0);
 
 	CHECK(pcp_free_pages(&p, page, 0) == 0);
+	CHECK(p.nr_put == TEST_BATCH + 1);
 	CHECK(pcp_drain_all(&p) == TEST_BATCH);
 	CHECK(b.free_count == TEST_NR_PAGES);
 	CHECK(pcp_check(&p) == 0);
@@ -63,6 +66,11 @@ static int test_hit(void)
 	CHECK(a != NULL);
 	CHECK(c != NULL);
 	CHECK(a != c);
+	CHECK(a->refcount == 1);
+	CHECK(a->state == PAGE_ALLOCATED);
+	CHECK(c->refcount == 1);
+	CHECK(c->state == PAGE_ALLOCATED);
+	CHECK(p.nr_put == TEST_BATCH);
 	CHECK(p.count == TEST_BATCH - 2);
 	CHECK(b.free_count == TEST_NR_PAGES - TEST_BATCH);
 	CHECK(p.alloc_refills == 1);
@@ -88,6 +96,8 @@ static int test_free_cache(void)
 	CHECK(pcp_free_pages(&p, page, 0) == 0);
 	CHECK(page->is_free == false);
 	CHECK(page->refcount == 0);
+	CHECK(page->state == PAGE_IN_PCP);
+	CHECK(p.nr_put == TEST_BATCH + 1);
 	CHECK(p.count == TEST_BATCH);
 	CHECK(b.free_count == TEST_NR_PAGES - TEST_BATCH);
 
@@ -137,7 +147,10 @@ static int test_bypass_order(void)
 	page = pcp_alloc_pages(&p, 1);
 	CHECK(page != NULL);
 	CHECK(page->order == 1);
+	CHECK(page->refcount == 1);
+	CHECK(page->state == PAGE_ALLOCATED);
 	CHECK(p.count == 0);
+	CHECK(p.nr_put == 0);
 	CHECK(p.alloc_refills == 0);
 	CHECK(b.free_count == TEST_NR_PAGES - 2);
 	CHECK(pcp_check(&p) == 0);
@@ -175,6 +188,8 @@ static int test_drain(void)
 
 	CHECK(pcp_drain_all(&p) == 2);
 	CHECK(b.free_count == TEST_NR_PAGES);
+	for (i = 0; i < 4; i++)
+		CHECK(ptrs[i]->state == PAGE_IN_BUDDY);
 	CHECK(pcp_check(&p) == 0);
 	return 0;
 }
@@ -182,6 +197,7 @@ static int test_drain(void)
 static int test_invalid(void)
 {
 	struct buddy bad;
+	struct page *bad_page;
 
 	CHECK(pcp_init(NULL, &b, TEST_HIGH, TEST_BATCH) < 0);
 	CHECK(pcp_init(&p, NULL, TEST_HIGH, TEST_BATCH) < 0);
@@ -196,6 +212,15 @@ static int test_invalid(void)
 
 	/* 未分配的 page 不能进 pcp */
 	CHECK(pcp_free_pages(&p, &pages[0], 0) < 0);
+
+	/* state 不是 PAGE_ALLOCATED 的页也不能进 pcp */
+	bad_page = buddy_alloc(&b, 0);
+	CHECK(bad_page != NULL);
+	bad_page->state = PAGE_IN_PCP;
+	CHECK(pcp_free_pages(&p, bad_page, 0) < 0);
+	bad_page->state = PAGE_ALLOCATED;
+	CHECK(pcp_free_pages(&p, bad_page, 0) == 0);
+	CHECK(pcp_drain_all(&p) == 1);
 
 	CHECK(buddy_init(&bad, pages, TEST_NR_PAGES) == 0);
 	(void)bad;

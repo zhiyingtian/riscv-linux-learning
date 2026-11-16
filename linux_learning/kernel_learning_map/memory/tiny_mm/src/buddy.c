@@ -211,7 +211,8 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 		return -EINVAL;
 	if (!block_valid(b, page, order))
 		return -EINVAL;
-	if (page->order != order || page->is_free || page->refcount != 1 || page->state != PAGE_ALLOCATED)
+	if (page->order != order || page->is_free ||
+	    page->refcount != 1 || page->state != PAGE_ALLOCATED)
 		return -EINVAL;
 
 	/*
@@ -301,7 +302,8 @@ int buddy_check(const struct buddy *b)
 		while (p) {
 			if (!block_valid(b, p, i))
 				return -EINVAL;
-			if (!p->is_free || p->order != i || p->refcount != 0)
+			if (!p->is_free || p->order != i || p->refcount != 0 ||
+			    p->state != PAGE_IN_BUDDY)
 				return -EINVAL;
 
 			blocks++;

@@ -23,14 +23,14 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 |---|---|---|
 | M0 工具链/测试框架 | ✅ 已搭好 | [docs/m0-toolchain.md](docs/m0-toolchain.md) |
 | M1 物理页模型 | ✅ 已完成（56a96a7） | [docs/m1-physical-pages.md](docs/m1-physical-pages.md) |
-| M2 buddy/pcp | 🚧 M2a 完成；M2b pcp 脚手架 | [docs/m2-buddy.md](docs/m2-buddy.md) · [docs/m2b-pcp.md](docs/m2b-pcp.md) |
+| M2 buddy/pcp | ✅ M2a 完成（11/11）；M2b 完成（9/9） | [docs/m2-buddy.md](docs/m2-buddy.md) · [docs/m2b-pcp.md](docs/m2b-pcp.md) |
 | M3 页表/TLB | 未开始 | 框架里的 M3 |
 
 > M1 已完成：`make test` 11 个测试全部通过。
 >
 > M2a buddy 已完成：`make test-m2` 11 个测试全部通过。
 >
-> M2b pcp 脚手架已搭好：`make test-m2b` 目前 7 个失败。
+> M2b pcp 已完成：`make test-m2b` 9 个测试全部通过。
 
 ---
 
@@ -53,7 +53,7 @@ tiny_mm/
 ├── src/
 │   ├── pmm.c                       # 物理页实现（M1 已完成）
 │   ├── buddy.c                     # M2a buddy（已完成）
-│   └── pcp.c                       # M2b pcp（核心 TODO）
+│   └── pcp.c                       # M2b pcp（已完成）
 ├── tests/
 │   ├── test_runner.h               # M1 测试 runner
 │   ├── test_pmm.c                  # M1 的 11 个验收测试
@@ -64,7 +64,7 @@ tiny_mm/
 ├── reports/
 │   ├── M1.md                       # M1 阶段报告模板
 │   ├── M2.md                       # M2a 阶段报告
-│   └── M2b.md                      # M2b 阶段报告模板
+│   └── M2b.md                      # M2b 阶段报告
 ├── Makefile
 └── .gitignore
 ```
@@ -78,7 +78,7 @@ cd linux_learning/kernel_learning_map/memory/tiny_mm
 make
 make test        # M1，11/11 通过
 make test-m2     # M2a，11/11 通过
-make test-m2b    # M2b，脚手架阶段 7 个失败
+make test-m2b    # M2b，9/9 通过
 make test-all    # 三个都跑
 ```
 
@@ -200,13 +200,13 @@ all tests passed
 
 ---
 
-## M2b 脚手架：pcp
+## M2b：pcp 已完成
 
 M2b 在 buddy 上加一层 order-0 的 per-CPU page cache：
 
 - `include/pcp.h`：`struct pcp`、API；
-- `src/pcp.c`：`pcp_init()`/`pcp_check()` 已实现，`pcp_alloc_pages()`/`pcp_free_pages()`/`pcp_drain()` 是 TODO；
-- `tests/test_pcp.c`：9 个测试，脚手架阶段 `init`/`invalid` 通过，其余 7 个失败。
+- `src/pcp.c`：refill/hit/free/drain 已实现；
+- `tests/test_pcp.c`：9 个测试，当前全部通过。
 
 运行：
 
@@ -218,18 +218,23 @@ make test-m2b
 
 ```text
 [PASS] init
-[FAIL] refill
-...
-[FAIL] random stress
+[PASS] refill
+[PASS] pcp hit
+[PASS] free to pcp
+[PASS] high drain
+[PASS] order > 0 bypass
+[PASS] explicit drain
+[PASS] invalid
+[PASS] random stress
 
-7 test(s) failed
+all tests passed
 ```
 
-详细 refill/high/drain 步骤、测试表、bug 注入和 Linux 对照：
+详细 refill/high/drain 步骤、状态模型、测试表、bug 注入和 Linux 对照：
 
 - [docs/m2b-pcp.md](docs/m2b-pcp.md)
 
-M2b 通过后填 [reports/M2b.md](reports/M2b.md)，再进入 M2c：把 `pmm.c` 的 bitmap 换成 buddy + pcp。
+M2b 已完成，报告见 [reports/M2b.md](reports/M2b.md)。下一步 M2c：把 `pmm.c` 的 bitmap 换成 buddy + pcp。
 
 ---
 
