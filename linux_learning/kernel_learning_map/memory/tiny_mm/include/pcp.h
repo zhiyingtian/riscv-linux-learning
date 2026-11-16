@@ -17,7 +17,7 @@
  *
  * pcp 页不在 buddy 的 free_area 里，所以它们对 buddy 来说仍是“已分配”：
  *   - pcp 链表用 page->buddy_next 串起来；
- *   - pcp 里的 page：is_free=true、refcount=0、order=0；
+ *   - pcp 里的 page：is_free=false、refcount=0、order=0；
  *   - 从 pcp 取出后：is_free=false、refcount=1、order=0。
  */
 struct pcp {

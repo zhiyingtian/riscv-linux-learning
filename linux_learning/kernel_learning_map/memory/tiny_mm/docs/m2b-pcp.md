@@ -60,7 +60,7 @@ pcp 里的页对 buddy 来说仍然是“已分配”，不在 `free_area` 中�
 | 位置 | `is_free` | `refcount` | `order` | `buddy_next` |
 |---|---|---|---|---|
 | buddy 空闲块头 | true | 0 | 当前 order | buddy 空闲链表 |
-| pcp 缓存页 | true | 0 | 0 | pcp 链表 |
+| pcp 缓存页 | false | 0 | 0 | pcp 链表 |
 | 已分配页 | false | 1 | 分配 order | NULL |
 
 所以：

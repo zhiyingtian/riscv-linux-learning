@@ -4,18 +4,28 @@
 
 ## 1. 我实现了什么
 
-- [ ] `pcp_alloc_pages()`：命中、refill、miss
-- [ ] `pcp_free_pages()`：入缓存、double free 校验
-- [ ] `pcp_drain()`：恢复 page 状态后还 buddy
-- [ ] high 触发批量 drain
-- [ ] order > 0 绕过 pcp
-- [ ] `pcp_check()` 全部通过
+- [x] `pcp_alloc_pages()`：命中、refill、miss
+- [x] `pcp_free_pages()`：入缓存、double free 校验
+- [x] `pcp_drain()`：恢复 page 状态后还 buddy
+- [x] high 触发批量 drain
+- [x] order > 0 绕过 pcp
+- [x] `pcp_check()` 全部通过
 
 ## 2. 测试结果
 
 ```text
 $ make test-m2b
-# 粘贴最后 20 行
+[PASS] init
+[PASS] refill
+[PASS] pcp hit
+[PASS] free to pcp
+[PASS] high drain
+[PASS] order > 0 bypass
+[PASS] explicit drain
+[PASS] invalid
+[PASS] random stress
+---------------------------------
+all tests passed
 ```
 
 ## 3. refill/high/drain 画图
@@ -37,8 +47,11 @@ $ make test-m2b
 
 ```text
 free 到 count=8 时发生什么？
+A: 自动将pcp中的batch个page释放给buddy
 drain 4 页后 count 是多少？
+A: 如果有pcp里面有不超过4个page，则最后为0，否则为N-4
 drain 前 page 的 refcount/is_free 要设置成什么？
+A: page中新增了state，所以drain前is_free保持false不变，refcount=1, state=PAGE_ALLOCATED
 ```
 
 ## 4. 我踩的坑
@@ -67,9 +80,7 @@ drain 前 page 的 refcount/is_free 要设置成什么？
 
 ## 7. 还没懂的问题
 
-1.
-2.
-
+NA
 ## 8. 进入 M2c 前的一句话总结
 
-> pcp 的本质是：____________________________________________
+> pcp 的本质是：__指定order下，提前向buddy申请batch个页面的一个cache数组，在符合order条件下，可以跳过buddy系统直接分配，加快分配速度_

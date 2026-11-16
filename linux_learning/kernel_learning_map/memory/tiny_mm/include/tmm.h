@@ -22,6 +22,12 @@
 
 typedef uint64_t phys_addr_t;
 
+enum page_state {
+	PAGE_ALLOCATED,
+	PAGE_IN_BUDDY,
+	PAGE_IN_PCP,
+};
+
 /*
  * struct page：物理页的元数据，不是页内容。
  *
@@ -35,6 +41,7 @@ struct page {
 	int refcount;		/* 引用计数：alloc 后 1，free 后 0 */
 	bool is_free;		/* 是否在 allocator 的空闲集合里 */
 	unsigned int zone_id;	/* 属于哪个 zone（M1 只有一个 zone） */
+	enum page_state state;	/* 页状态：已分配/在 buddy 空闲链表/在 pcp 链表 */
 };
 
 struct pglist_data;

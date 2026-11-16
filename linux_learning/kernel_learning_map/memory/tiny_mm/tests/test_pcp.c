@@ -86,7 +86,7 @@ static int test_free_cache(void)
 	CHECK(b.free_count == TEST_NR_PAGES - TEST_BATCH);
 
 	CHECK(pcp_free_pages(&p, page, 0) == 0);
-	CHECK(page->is_free == true);
+	CHECK(page->is_free == false);
 	CHECK(page->refcount == 0);
 	CHECK(p.count == TEST_BATCH);
 	CHECK(b.free_count == TEST_NR_PAGES - TEST_BATCH);

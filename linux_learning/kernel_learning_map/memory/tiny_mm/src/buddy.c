@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "buddy.h"
+#include "tmm.h"
 
 static unsigned long page_index(const struct buddy *b, const struct page *page)
 {
@@ -38,6 +39,7 @@ static void free_list_push(struct buddy *b, struct page *page,
 	page->order = order;
 	page->is_free = true;
 	page->refcount = 0;
+	page->state = PAGE_IN_BUDDY;
 	page->buddy_next = b->free_area[order].head;
 	b->free_area[order].head = page;
 	b->free_area[order].nr_free++;
@@ -83,11 +85,13 @@ static void merge_page_pair(struct page *low, struct page *high)
 	low->is_free = true;
 	low->refcount = 0;
 	low->buddy_next = NULL;
+	low->state = PAGE_IN_BUDDY;
 
 	high->order = 0;
 	high->is_free = false;
 	high->refcount = 0;
 	high->buddy_next = NULL;
+	high->state = PAGE_IN_BUDDY;
 }
 
 static int order_for_pages(unsigned long nr_pages, unsigned int *order)
@@ -134,6 +138,7 @@ int buddy_init(struct buddy *b, struct page *pages, unsigned long nr_pages)
 		pages[i].is_free = false;
 		pages[i].refcount = 0;
 		pages[i].buddy_next = NULL;
+		pages[i].state = PAGE_IN_BUDDY;
 	}
 
 	/* 初始时整个数组是一个 max_order 的空闲块，块头是 pages[0]。 */
@@ -189,6 +194,7 @@ struct page *buddy_alloc(struct buddy *b, unsigned int order)
 		page->is_free = false;
 		page->refcount = 1;
 		page->buddy_next = NULL;
+		page->state = PAGE_ALLOCATED;
 		b->free_count -= (1UL << order);
 		return page;
 	}
@@ -205,7 +211,7 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 		return -EINVAL;
 	if (!block_valid(b, page, order))
 		return -EINVAL;
-	if (page->order != order || page->is_free || page->refcount != 1)
+	if (page->order != order || page->is_free || page->refcount != 1 || page->state != PAGE_ALLOCATED)
 		return -EINVAL;
 
 	/*
@@ -232,6 +238,7 @@ int buddy_free(struct buddy *b, struct page *page, unsigned int order)
 
 	page->is_free = true;
 	page->refcount = 0;
+	page->state = PAGE_IN_BUDDY;
 	b->free_count += (1UL << order);
 
 	index = page_index(b, page);
