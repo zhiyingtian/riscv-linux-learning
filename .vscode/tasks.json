@@ -21,13 +21,13 @@
             }
         },
         {
-            "label": "tiny-mm: build M1 (debug)",
+            "label": "tiny-mm: build M2c (debug)",
             "type": "shell",
             "command": "make",
             "args": [
                 "-C",
                 "${workspaceFolder}/linux_learning/kernel_learning_map/memory/tiny_mm",
-                "debug-m1"
+                "debug-m2c"
             ],
             "group": "build",
             "problemMatcher": [
@@ -40,13 +40,13 @@
             }
         },
         {
-            "label": "tiny-mm: test M1",
+            "label": "tiny-mm: test M2c",
             "type": "shell",
             "command": "make",
             "args": [
                 "-C",
                 "${workspaceFolder}/linux_learning/kernel_learning_map/memory/tiny_mm",
-                "test"
+                "test-m2c"
             ],
             "group": "test",
             "problemMatcher": []

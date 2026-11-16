@@ -28,7 +28,7 @@
             "preLaunchTask": "tiny-mm: build M2 (debug)"
         },
         {
-            "name": "tiny-mm: debug M1 pmm",
+            "name": "tiny-mm: debug M2c pmm",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/linux_learning/kernel_learning_map/memory/tiny_mm/build-debug/test_pmm",
@@ -51,7 +51,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "tiny-mm: build M1 (debug)"
+            "preLaunchTask": "tiny-mm: build M2c (debug)"
         },
         {
             "name": "tiny-mm: debug M2b pcp",

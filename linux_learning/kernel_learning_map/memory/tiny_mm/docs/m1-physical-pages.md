@@ -1,5 +1,7 @@
 # M1：物理地址模型
 
+> **历史阶段说明**：本文描述 M1 的 bitmap 实现。当前 `pmm.c` 已进入 M2c，`make test` 跑的是 buddy + pcp 集成验收；M1 代码/测试语义保留在 git 历史和本说明中。
+
 > 项目总入口：[../README.md](../README.md)
 > 上一阶段：[m0-toolchain.md](m0-toolchain.md)
 > 完整框架：[tiny_mm_learning_framework.md](tiny_mm_learning_framework.md)

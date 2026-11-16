@@ -6,7 +6,10 @@
 #include <stdint.h>
 
 /*
- * tiny-mm / M1: 物理地址模型
+ * tiny-mm: 物理地址模型 + 物理页分配
+ *
+ * M1：bitmap 版 order-0 分配器。
+ * M2c：pmm 改用 buddy + pcp，支持 order 0..MAX_ORDER-1。
  *
  * 这里刻意使用 Linux 风格的命名，但实现是用户态模拟。
  * 先不要看 Linux 源码抄实现：先按注释和测试把语义想清楚。
@@ -70,7 +73,7 @@ struct pglist_data {
  * 初始化/销毁。
  *
  * start_pfn 模拟物理内存起始 PFN（不是一定从 0 开始）。
- * nr_pages 是本次模拟管理的页数。
+ * nr_pages 是本次模拟管理的页数；M2c 要求它是 2 的幂。
  */
 int pmm_init(unsigned long start_pfn, unsigned long nr_pages);
 void pmm_exit(void);
@@ -78,11 +81,14 @@ void pmm_exit(void);
 /*
  * 分配/释放。
  *
- * M1 只支持 order=0；order>0 返回 NULL（M2 再扩展）。
+ * M2c：order 0 走 pcp，order > 0 直接走 buddy。
  * 失败返回 NULL，不崩溃。
  *
  * pmm_free_pages 返回 0 成功，负数错误：
- *   -EINVAL: page 为空/越界/已 free/order 不匹配
+ *   -EINVAL: page 为空/越界/已 free/order 不匹配/state 不对
+ *
+ * 注意：order 0 free 后页进入 pcp，此时 is_free=false、
+ * refcount=0、state=PAGE_IN_PCP，而不是回到 buddy 的 free_area。
  */
 struct page *pmm_alloc_pages(unsigned int order);
 int pmm_free_pages(struct page *page, unsigned int order);

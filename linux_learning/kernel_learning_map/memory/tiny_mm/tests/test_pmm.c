@@ -28,12 +28,14 @@ static int test_alloc_free(void)
 	CHECK(page->refcount == 1);
 	CHECK(page->is_free == false);
 	CHECK(page->order == 0);
+	CHECK(page->state == PAGE_ALLOCATED);
 	CHECK(pmm_free_count() == TEST_NR_PAGES - 1);
 	CHECK(pmm_check() == 0);
 
 	CHECK(pmm_free_pages(page, 0) == 0);
 	CHECK(page->refcount == 0);
-	CHECK(page->is_free == true);
+	CHECK(page->is_free == false);
+	CHECK(page->state == PAGE_IN_PCP);
 	CHECK(pmm_free_count() == TEST_NR_PAGES);
 	CHECK(pmm_check() == 0);
 	return 0;
@@ -55,7 +57,6 @@ static int test_pfn_page_roundtrip(void)
 		CHECK(pfn_to_page(page_to_pfn(page)) == page);
 	}
 
-	/* 边界：越界要返回 NULL */
 	CHECK(!pfn_valid(TEST_START_PFN - 1));
 	CHECK(!pfn_valid(TEST_START_PFN + TEST_NR_PAGES));
 	CHECK(pfn_to_page(TEST_START_PFN - 1) == NULL);
@@ -75,8 +76,6 @@ static int test_paddr_roundtrip(void)
 
 		CHECK(paddr == ((phys_addr_t)pfn << PAGE_SHIFT));
 		CHECK(phys_to_pfn(paddr) == pfn);
-
-		/* 非页对齐地址向下取整到同一个 PFN */
 		CHECK(phys_to_pfn(paddr + PAGE_SIZE - 1) == pfn);
 	}
 	return 0;
@@ -132,30 +131,34 @@ static int test_wrong_order(void)
 	/* 分配 order=0，却按 order=1 释放：必须拒绝 */
 	CHECK(pmm_free_pages(page, 1) < 0);
 	CHECK(page->is_free == false);
+	CHECK(page->refcount == 1);
+	CHECK(page->state == PAGE_ALLOCATED);
 	CHECK(pmm_free_count() == TEST_NR_PAGES - 1);
 	CHECK(pmm_check() == 0);
 
-	/* 正确的 order 仍然可以释放 */
 	CHECK(pmm_free_pages(page, 0) == 0);
 	CHECK(pmm_free_count() == TEST_NR_PAGES);
 	return 0;
 }
 
-static int test_order_unsupported(void)
+static int test_order_supported(void)
 {
 	struct page *page;
 
 	CHECK(pmm_init(TEST_START_PFN, TEST_NR_PAGES) == 0);
 
-	/* 先确认 order=0 能工作，再确认 order>0 被拒绝 */
-	page = pmm_alloc_pages(0);
+	page = pmm_alloc_pages(2);
 	CHECK(page != NULL);
-	CHECK(pmm_alloc_pages(1) == NULL);
-	CHECK(pmm_free_count() == TEST_NR_PAGES - 1);
+	CHECK(page->order == 2);
+	CHECK(page->refcount == 1);
+	CHECK(page->is_free == false);
+	CHECK(page->state == PAGE_ALLOCATED);
+	CHECK(pmm_free_count() == TEST_NR_PAGES - 4);
 	CHECK(pmm_check() == 0);
 
-	CHECK(pmm_free_pages(page, 0) == 0);
+	CHECK(pmm_free_pages(page, 2) == 0);
 	CHECK(pmm_free_count() == TEST_NR_PAGES);
+	CHECK(pmm_check() == 0);
 	return 0;
 }
 
@@ -238,7 +241,7 @@ int main(void)
 {
 	int failures = 0;
 
-	printf("tiny-mm / M1: physical page model\n");
+	printf("tiny-mm / M2c: pmm with buddy + pcp\n");
 	printf("---------------------------------\n");
 
 	failures += run_test("init", test_init);
@@ -248,7 +251,7 @@ int main(void)
 	failures += run_test("exhaust", test_exhaust);
 	failures += run_test("double free", test_double_free);
 	failures += run_test("wrong order", test_wrong_order);
-	failures += run_test("order unsupported", test_order_unsupported);
+	failures += run_test("order supported", test_order_supported);
 	failures += run_test("zone", test_zone);
 	failures += run_test("pgdat", test_pgdat);
 	failures += run_test("random stress", test_random_stress);

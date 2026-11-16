@@ -4,7 +4,7 @@
 > 上一阶段：[m1-physical-pages.md](m1-physical-pages.md)
 > 完整框架：[tiny_mm_learning_framework.md](tiny_mm_learning_framework.md)
 >
-> **状态：✅ M2a 已完成（`make test-m2` 11/11 pass）；M2b pcp 脚手架已搭好，M2c 未开始。**
+> **状态：✅ M2a 已完成（`make test-m2` 11/11 pass）；✅ M2b 已完成；🚧 M2c pmm 集成脚手架已搭好。**
 
 ## 目标
 
@@ -46,7 +46,7 @@ tests/test_buddy.c
 
 所以当前：
 
-- `make test` → M1，应该全绿；
+- `make test-m2` → M2a，应该全绿；`make test` 现在跑 M2c 集成；
 - `make test-m2` → M2a，11/11 通过；
 - `make test-all` → M1/M2a/M2b 都跑（M2b 未实现时会有预期失败）。
 
@@ -172,7 +172,7 @@ all tests passed
 ```bash
 cd linux_learning/kernel_learning_map/memory/tiny_mm
 
-make test        # M1，11/11
+make test-m2     # M2a，11/11（M2c 后 make test 改为 M2c 验收）
 make test-m2     # M2，11/11
 make test-all    # 两个都跑
 ```
