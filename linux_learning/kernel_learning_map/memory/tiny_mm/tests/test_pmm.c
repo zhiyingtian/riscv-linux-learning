@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "tmm.h"
+#include "../include/tmm.h"
 #include "test_runner.h"
 
 #define TEST_START_PFN 0x100UL
