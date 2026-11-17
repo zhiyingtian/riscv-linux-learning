@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "tmm.h"
+#include "../include/tmm.h"
 
 #define CHECK(cond)                                                           \
 	do {                                                                  \
