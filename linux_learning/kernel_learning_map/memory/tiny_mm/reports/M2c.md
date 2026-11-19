@@ -7,9 +7,9 @@
 - [x] `pmm_init()`：初始化 buddy + pcp
 - [x] `pmm_exit()`：drain pcp 后清理
 - [x] `pmm_check()`：检查 buddy + pcp + free_count
-- [ ] `pmm_alloc_pages()`：order 0 走 pcp，order > 0 走 buddy
-- [ ] `pmm_free_pages()`：order 0 走 pcp，order > 0 走 buddy
-- [ ] 高阶 split/merge 回归
+- [x] `pmm_alloc_pages()`：order 0 走 pcp，order > 0 走 buddy
+- [x] `pmm_free_pages()`：order 0 走 pcp，order > 0 走 buddy
+- [x] 高阶 split/merge 回归
 - [ ] 碎片化与随机压力
 - [ ] 水位/回收标记
 
@@ -18,18 +18,18 @@
 ```text
 $ make test-m2c
 [PASS] init
-[FAIL] alloc/free
+[PASS] alloc/free
 [PASS] pfn/page roundtrip
 [PASS] pfn/paddr roundtrip
-[FAIL] exhaust
-[FAIL] double free
-[FAIL] wrong order
-[FAIL] order supported
-[FAIL] zone
-[FAIL] pgdat
-[FAIL] random stress
-
-8 test(s) failed
+[PASS] exhaust
+[PASS] double free
+[PASS] wrong order
+[PASS] order supported
+[PASS] zone
+[PASS] pgdat
+[PASS] random stress
+---------------------------------
+all tests passed
 ```
 
 实现 alloc/free 后应变成 11/11 全绿。

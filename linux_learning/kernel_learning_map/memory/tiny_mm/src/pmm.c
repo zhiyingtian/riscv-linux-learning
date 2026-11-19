@@ -137,32 +137,60 @@ unsigned long phys_to_pfn(phys_addr_t paddr)
 
 struct page *pmm_alloc_pages(unsigned int order)
 {
-	(void)order;
-
 	/*
-	 * TODO(M2c):
+	 * M2c:
 	 *   1. order 0 调用 pcp_alloc_pages(&g_pmm.pcp, 0)；
 	 *   2. order > 0 调用 buddy_alloc(&g_pmm.buddy, order)；
 	 *   3. 成功后更新 g_pmm.free_count 和 zone.free_count；
 	 *   4. 失败返回 NULL，不修改状态。
 	 */
-	return NULL;
+
+	 struct page *page;
+	if (order == 0) {
+		page = pcp_alloc_pages(&g_pmm.pcp, order);
+		if (!page)
+			return NULL;
+	}
+	else
+	{
+		page = buddy_alloc(&g_pmm.buddy, order);
+		if (!page)
+			return NULL;
+	}
+	g_pmm.free_count -= 1UL << order;
+	g_pmm.node.node_zones[0].free_count -= 1UL << order;
+
+	return page;
 }
 
 int pmm_free_pages(struct page *page, unsigned int order)
 {
-	(void)page;
-	(void)order;
-
 	/*
-	 * TODO(M2c):
+	 * M2c:
 	 *   1. 校验 page 在 pages 范围内；
 	 *   2. order 0 调用 pcp_free_pages(&g_pmm.pcp, page, 0)；
 	 *   3. order > 0 调用 buddy_free(&g_pmm.buddy, page, order)；
 	 *   4. 成功后更新 g_pmm.free_count 和 zone.free_count；
 	 *   5. 失败返回 -EINVAL。
 	 */
-	return -EINVAL;
+
+	if (!page || page < g_pmm.pages || page >= g_pmm.pages + g_pmm.nr_pages)
+		return -EINVAL;
+	if (order == 0)
+	{
+		if (pcp_free_pages(&g_pmm.pcp, page, order))
+			return -EINVAL;
+	}
+	else
+	{
+		if (buddy_free(&g_pmm.buddy, page, order))
+			return -EINVAL;
+	}
+
+	g_pmm.free_count += 1UL << order;
+	g_pmm.node.node_zones[0].free_count += 1UL << order;
+
+	return 0;
 }
 
 struct zone *page_zone(const struct page *page)
