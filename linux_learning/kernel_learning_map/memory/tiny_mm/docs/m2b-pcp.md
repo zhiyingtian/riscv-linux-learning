@@ -326,4 +326,4 @@ M2b 先只保留最核心的 refill/hit/free/drain。
 
 1. 已填 [../reports/M2b.md](../reports/M2b.md)；
 2. 跑 `make test` + `make test-m2` + `make test-m2b`；
-3. 下一步 M2c：把 `pmm` 的 bitmap 换成 buddy + pcp。
+3. M2c 已完成：`pmm` 已换成 buddy + pcp（`make test-m2c` 20/20）。

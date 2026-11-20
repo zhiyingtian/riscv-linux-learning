@@ -4,7 +4,7 @@
 > 上一阶段：[m1-physical-pages.md](m1-physical-pages.md)
 > 完整框架：[tiny_mm_learning_framework.md](tiny_mm_learning_framework.md)
 >
-> **状态：✅ M2a 已完成（`make test-m2` 11/11 pass）；✅ M2b 已完成；🚧 M2c pmm 集成脚手架已搭好。**
+> **状态：✅ M2a 已完成（`make test-m2` 11/11 pass）；✅ M2b 已完成（9/9）；✅ M2c pmm 集成已完成（20/20）。**
 
 ## 目标
 

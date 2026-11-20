@@ -145,15 +145,24 @@ struct page *pmm_alloc_pages(unsigned int order)
 	 *   4. 失败返回 NULL，不修改状态。
 	 */
 
-	 struct page *page;
+	struct page *page;
+
 	if (order == 0) {
 		page = pcp_alloc_pages(&g_pmm.pcp, order);
 		if (!page)
 			return NULL;
-	}
-	else
-	{
+	} else {
 		page = buddy_alloc(&g_pmm.buddy, order);
+
+		/*
+		 * 高阶分配失败时，pcp 里的 order-0 缓存页会挡住合并。
+		 * 先把 pcp 还回 buddy 再试一次；drain 只搬页，
+		 * buddy.free_count + pcp.count 不变，所以 free_count 不用改。
+		 */
+		if (!page && g_pmm.pcp.count > 0) {
+			pcp_drain_all(&g_pmm.pcp);
+			page = buddy_alloc(&g_pmm.buddy, order);
+		}
 		if (!page)
 			return NULL;
 	}

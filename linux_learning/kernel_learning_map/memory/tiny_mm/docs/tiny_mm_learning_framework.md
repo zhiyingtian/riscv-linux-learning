@@ -154,7 +154,7 @@ tiny_mm/
 
 ### M2：buddy + pcp + 分配策略（3–5 天）
 
-> 当前进度：M2a buddy 已完成；M2b pcp 已完成；M2c 脚手架已搭好，`pmm_alloc_pages()`/`pmm_free_pages()` 待实现。
+> 当前进度：M2a buddy 已完成；M2b pcp 已完成；M2c pmm 集成已完成（`make test-m2c` 20/20）。下一步补水位/回收标记。
 >
 > 入口：[m2-buddy.md](m2-buddy.md) · [m2b-pcp.md](m2b-pcp.md)
 

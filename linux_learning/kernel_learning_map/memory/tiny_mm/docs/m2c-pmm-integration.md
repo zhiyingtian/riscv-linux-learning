@@ -2,9 +2,9 @@
 
 > 项目总入口：[../README.md](../README.md)
 > 前置：[m2-buddy.md](m2-buddy.md) · [m2b-pcp.md](m2b-pcp.md)
-> 状态：**🚧 脚手架已搭好；`pmm_init()`/`pmm_check()` 已实现，alloc/free 是 TODO。**
+> 状态：**✅ 已完成；`make test-m2c` 20/20 通过。**
 >
-> 当前 `make test-m2c`：`init`、`pfn/page`、`pfn/paddr` 通过，其余 8 个失败。
+> 验收测试见 [../tests/test_pmm.c](../tests/test_pmm.c)，阶段报告见 [../reports/M2c.md](../reports/M2c.md)。
 
 ## 目标
 
@@ -100,13 +100,14 @@ M2c 改变了 M1 的语义：
   - `pcp_check()`；
   - 检查 `pcp.buddy == &buddy`；
   - 检查 `pmm.free_count`、`zone.free_count` 与 `buddy.free_count + pcp.count` 一致。
+- 高阶分配失败时先 `pcp_drain_all()` 再重试；drain 只搬页，`free_count` 不变。
 - M1 的地址转换、zone/pgdat API 保留。
 
-## 需要你实现
+## 实现要点（已完成）
 
 ### 1. `pmm_alloc_pages(order)`
 
-建议步骤：
+实现步骤：
 
 ```text
 1. order > MAX_ORDER-1 → NULL
@@ -114,9 +115,12 @@ M2c 改变了 M1 的语义：
        page = pcp_alloc_pages(&g_pmm.pcp, 0)
    else:
        page = buddy_alloc(&g_pmm.buddy, order)
+       if page == NULL && pcp.count > 0:
+           pcp_drain_all(&g_pmm.pcp)
+           page = buddy_alloc(&g_pmm.buddy, order)
 3. page == NULL → 返回 NULL（不改 free_count）
 4. 更新：
-       g_pmm.free_count = buddy.free_count + pcp.count
+       g_pmm.free_count -= 1UL << order
        zone.free_count = g_pmm.free_count
 5. 返回 page
 ```
@@ -125,7 +129,7 @@ M2c 改变了 M1 的语义：
 
 ### 2. `pmm_free_pages(page, order)`
 
-建议步骤：
+实现步骤：
 
 ```text
 1. page 为空/越界 → -EINVAL
@@ -135,7 +139,7 @@ M2c 改变了 M1 的语义：
        rc = buddy_free(&g_pmm.buddy, page, order)
 3. rc != 0 → -EINVAL（不要改 free_count）
 4. 更新：
-       g_pmm.free_count = buddy.free_count + pcp.count
+       g_pmm.free_count += 1UL << order
        zone.free_count = g_pmm.free_count
 5. 返回 0
 ```
@@ -165,7 +169,7 @@ unsigned long pcp_drain;
 
 ## 验收目标
 
-实现后 `make test-m2c` 应全部通过：
+`make test-m2c` 当前 20 个测试全部通过：
 
 ```text
 [PASS] init
@@ -179,20 +183,30 @@ unsigned long pcp_drain;
 [PASS] zone
 [PASS] pgdat
 [PASS] random stress
+[PASS] free order mismatch
+[PASS] high order merge
+[PASS] double free high order
+[PASS] order0 pcp hit
+[PASS] fragmentation
+[PASS] exhaust high order
+[PASS] order limit
+[PASS] high order drains pcp
+[PASS] random stress all orders
+---------------------------------
+all tests passed
 ```
 
-还必须验证：
+对应的验收断言（均已覆盖）：
 
 1. 分配 order=2，按 order=0 释放 → 错误；
 2. 分配 order=2，按 order=2 释放 → 正确合并；
 3. 交替分配制造碎片，高阶分配失败；
-4. order-0 批量分配/释放后 pcp 命中率合理；
+4. order-0 批量分配/释放后 pcp 命中（`order0 pcp hit`）；
 5. 全部释放后 `pmm_free_count() == nr_pages`；
 6. 每次操作后 `pmm_check() == 0`。
 
-M2c 完成后再加：
+M2c 完成后还可以加：
 
-- 10 万次随机 alloc/free，覆盖所有 order；
 - 水位/回收标记（M2 框架要求）；
 - `free_pages[order]` 和 fragmentation 统计。
 
@@ -211,7 +225,7 @@ M2c 只做“接线”，不引入 migratetype、watermark、GFP flag。
 
 ## 下一步
 
-M2c 全绿并填 [../reports/M2c.md](../reports/M2c.md) 后：
+M2c 已完成并填好 [../reports/M2c.md](../reports/M2c.md)。下一步：
 
 1. 给分配器加水位/回收标记；
 2. 再做 M3：页表/TLB。

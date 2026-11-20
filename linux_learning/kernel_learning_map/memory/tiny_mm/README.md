@@ -23,7 +23,7 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 |---|---|---|
 | M0 工具链/测试框架 | ✅ 已搭好 | [docs/m0-toolchain.md](docs/m0-toolchain.md) |
 | M1 物理页模型 | ✅ 已完成（56a96a7） | [docs/m1-physical-pages.md](docs/m1-physical-pages.md) |
-| M2 buddy/pcp | ✅ M2a 完成（11/11）；✅ M2b 完成（9/9）；🚧 M2c 集成脚手架 | [docs/m2-buddy.md](docs/m2-buddy.md) · [docs/m2b-pcp.md](docs/m2b-pcp.md) · [docs/m2c-pmm-integration.md](docs/m2c-pmm-integration.md) |
+| M2 buddy/pcp | ✅ M2a 完成（11/11）；✅ M2b 完成（9/9）；✅ M2c 完成（20/20） | [docs/m2-buddy.md](docs/m2-buddy.md) · [docs/m2b-pcp.md](docs/m2b-pcp.md) · [docs/m2c-pmm-integration.md](docs/m2c-pmm-integration.md) |
 | M3 页表/TLB | 未开始 | 框架里的 M3 |
 
 > M1 已完成（历史）：原 `make test` 的 11 个 bitmap 测试已由 M2c 验收替代。
@@ -32,7 +32,7 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 >
 > M2b pcp 已完成：`make test-m2b` 9 个测试全部通过。
 >
-> M2c pmm 集成脚手架已搭好：`pmm_init()`/`pmm_check()` 已完成，alloc/free 是 TODO；当前 `make test-m2c` 3 个通过、8 个失败。
+> M2c pmm 集成已完成：order 0 走 pcp、order > 0 走 buddy，`make test-m2c` 20 个测试全部通过。
 
 ---
 
@@ -54,12 +54,12 @@ tiny_mm/
 │   ├── buddy.h                     # M2a buddy 数据结构/API
 │   └── pcp.h                       # M2b pcp 数据结构/API
 ├── src/
-│   ├── pmm.c                       # M2c：buddy + pcp 集成（alloc/free TODO）
+│   ├── pmm.c                       # M2c：buddy + pcp 集成（已完成）
 │   ├── buddy.c                     # M2a buddy（已完成）
 │   └── pcp.c                       # M2b pcp（已完成）
 ├── tests/
 │   ├── test_runner.h               # M1 测试 runner
-│   ├── test_pmm.c                  # M2c 的 11 个验收测试
+│   ├── test_pmm.c                  # M2c 的 20 个验收测试
 │   ├── test_runner_buddy.h         # M2a 测试 runner
 │   ├── test_buddy.c                # M2a 的 11 个验收测试
 │   ├── test_runner_pcp.h           # M2b 测试 runner
@@ -68,7 +68,7 @@ tiny_mm/
 │   ├── M1.md                       # M1 阶段报告模板
 │   ├── M2.md                       # M2a 阶段报告
 │   ├── M2b.md                      # M2b 阶段报告
-│   └── M2c.md                      # M2c 阶段报告脚手架
+│   └── M2c.md                      # M2c 阶段报告
 ├── Makefile
 └── .gitignore
 ```
@@ -80,7 +80,7 @@ tiny_mm/
 ```bash
 cd linux_learning/kernel_learning_map/memory/tiny_mm
 make
-make test        # M2c，脚手架 3/11 通过
+make test        # M2c，20/20 通过
 make test-m2c    # 同上，M2c 集成
 make test-m2     # M2a，11/11 通过
 make test-m2b    # M2b，9/9 通过
@@ -94,18 +94,32 @@ make clean
 make SAN= test
 ```
 
-M2c 脚手架当前的预期输出：
+M2c 的预期输出：
 
 ```text
 [PASS] init
-[FAIL] alloc/free
+[PASS] alloc/free
 [PASS] pfn/page roundtrip
 [PASS] pfn/paddr roundtrip
-...
-8 test(s) failed
+[PASS] exhaust
+[PASS] double free
+[PASS] wrong order
+[PASS] order supported
+[PASS] zone
+[PASS] pgdat
+[PASS] random stress
+[PASS] free order mismatch
+[PASS] high order merge
+[PASS] double free high order
+[PASS] order0 pcp hit
+[PASS] fragmentation
+[PASS] exhaust high order
+[PASS] order limit
+[PASS] high order drains pcp
+[PASS] random stress all orders
+---------------------------------
+all tests passed
 ```
-
-实现 `pmm_alloc_pages()`/`pmm_free_pages()` 后应变成 11/11 全绿。
 
 ---
 
@@ -164,7 +178,7 @@ M1 的历史说明和 bitmap 版本语义：
 - [docs/m1-physical-pages.md](docs/m1-physical-pages.md)
 - 历史报告：[reports/M1.md](reports/M1.md)
 
-M2c 会把测试里的 order-0 free 断言从 `is_free=true` 改成 `PAGE_IN_PCP`。
+M2c 已完成：测试里的 order-0 free 断言已从 `is_free=true` 改成 `PAGE_IN_PCP`。
 
 ---
 
@@ -239,14 +253,14 @@ M2b 已完成，报告见 [reports/M2b.md](reports/M2b.md)。
 
 ---
 
-## M2c：pmm 集成（脚手架）
+## M2c：pmm 集成（已完成）
 
 M2c 把 M1 的 bitmap 分配器切到 buddy + pcp：
 
-- `pmm_init()`：初始化 buddy + pcp（已实现）；
-- `pmm_check()`：检查 buddy + pcp + free_count（已实现）；
-- `pmm_alloc_pages()` / `pmm_free_pages()`：TODO；
-- order 0 走 pcp，order > 0 走 buddy；
+- `pmm_init()` / `pmm_exit()`：初始化、drain pcp 后清理；
+- `pmm_check()`：检查 buddy + pcp + free_count；
+- `pmm_alloc_pages()` / `pmm_free_pages()`：order 0 走 pcp，order > 0 走 buddy；
+- 高阶分配失败时 drain pcp 再重试；
 - `pmm.free_count = buddy.free_count + pcp.count`。
 
 运行：
@@ -255,29 +269,11 @@ M2c 把 M1 的 bitmap 分配器切到 buddy + pcp：
 make test-m2c
 ```
 
-当前预期：
-
-```text
-[PASS] init
-[FAIL] alloc/free
-[PASS] pfn/page roundtrip
-[PASS] pfn/paddr roundtrip
-[FAIL] exhaust
-[FAIL] double free
-[FAIL] wrong order
-[FAIL] order supported
-[FAIL] zone
-[FAIL] pgdat
-[FAIL] random stress
-
-8 test(s) failed
-```
-
-实现说明、状态语义、验收目标：
+当前 20 个测试全部通过。实现说明、状态语义、验收目标：
 
 - [docs/m2c-pmm-integration.md](docs/m2c-pmm-integration.md)
 
-完成后填 [reports/M2c.md](reports/M2c.md)，再考虑水位/回收标记和 M3。
+报告见 [reports/M2c.md](reports/M2c.md)；下一步水位/回收标记和 M3。
 
 ---
 
