@@ -156,6 +156,8 @@ tiny_mm/
 
 > 当前进度：M2a buddy 已完成；M2b pcp 已完成；M2c pmm 集成已完成（`make test-m2c` 20/20）；M2d 水位/回收标记已完成（`make test-m2d` 7/7）。
 >
+> M2 复盘：[m2-review.md](m2-review.md)。
+>
 > 入口：[m2-buddy.md](m2-buddy.md) · [m2b-pcp.md](m2b-pcp.md)
 
 **知识点**

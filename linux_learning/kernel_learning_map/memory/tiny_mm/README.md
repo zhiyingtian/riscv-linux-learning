@@ -36,6 +36,8 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 > M2c pmm 集成已完成：order 0 走 pcp、order > 0 走 buddy，`make test-m2c` 20 个测试全部通过。
 >
 > M2d 水位/回收标记已完成：`make test-m2d` 7 个测试全部通过；M2c 回归保持 20/20。
+>
+> M2 复盘文档：[docs/m2-review.md](docs/m2-review.md)。
 
 ---
 
@@ -51,6 +53,7 @@ tiny_mm/
 │   ├── m2b-pcp.md                  # M2b：pcp refill/high/drain、9 个测试
 │   ├── m2c-pmm-integration.md      # M2c：pmm 接入 buddy + pcp
 │   ├── m2d-watermark.md            # M2d：水位/回收标记
+│   ├── m2-review.md                # M2 学习复盘：buddy → pcp → pmm → 水位
 │   ├── tiny_mm_learning_framework.md # M0–M9 完整框架
 │   └── memory_capstone_tiny_mm.md  # 最初的项目方案
 ├── include/
@@ -336,6 +339,7 @@ all tests passed
 - [M2b：pcp](docs/m2b-pcp.md)
 - [M2c：pmm 集成](docs/m2c-pmm-integration.md)
 - [M2d：水位/回收标记](docs/m2d-watermark.md)
+- [M2 学习复盘：buddy → pcp → pmm → 水位](docs/m2-review.md)
 - [tiny-mm 完整学习框架](docs/tiny_mm_learning_framework.md)
 - [最初的项目方案](docs/memory_capstone_tiny_mm.md)
 
