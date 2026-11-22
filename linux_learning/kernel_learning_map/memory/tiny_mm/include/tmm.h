@@ -10,6 +10,7 @@
  *
  * M1：bitmap 版 order-0 分配器。
  * M2c：pmm 改用 buddy + pcp，支持 order 0..MAX_ORDER-1。
+ * M2d：zone 增加 min/low/high 水位与回收标记。
  *
  * 这里刻意使用 Linux 风格的命名，但实现是用户态模拟。
  * 先不要看 Linux 源码抄实现：先按注释和测试把语义想清楚。
@@ -29,6 +30,20 @@ enum page_state {
 	PAGE_ALLOCATED,
 	PAGE_IN_BUDDY,
 	PAGE_IN_PCP,
+};
+
+/*
+ * M2d: zone 水位。
+ *
+ *   WMARK_MIN  : 硬预留，普通分配不能低于它；
+ *   WMARK_LOW  : 低于它时标记“需要回收”；
+ *   WMARK_HIGH : 回到它以上时清除回收标记。
+ */
+enum zone_watermark {
+	WMARK_MIN,
+	WMARK_LOW,
+	WMARK_HIGH,
+	NR_WMARK,
 };
 
 /*
@@ -54,7 +69,12 @@ struct zone {
 	struct pglist_data *zone_pgdat;	/* 属于哪个 node */
 	unsigned long start_pfn;
 	unsigned long spanned_pages;
-	unsigned long free_count;
+	unsigned long free_count;	/* buddy + pcp 的总空闲页数 */
+
+	/* M2d: min/low/high 三个水位，索引是 enum zone_watermark。 */
+	unsigned long watermark[NR_WMARK];
+	bool reclaim_needed;		/* 是否已标记需要回收 */
+	unsigned long reclaim_wakeups;	/* 从健康进入 low 的次数 */
 };
 
 /*
@@ -94,6 +114,17 @@ struct page *pmm_alloc_pages(unsigned int order);
 int pmm_free_pages(struct page *page, unsigned int order);
 
 /*
+ * M2d: 带分配标志的版本。
+ *
+ * 普通分配（flags=0）会受 WMARK_MIN 水位限制；
+ * PMM_ALLOC_HARD 允许使用 min 预留，类似 Linux 的 ALLOC_HARDER/原子分配，
+ * 用于耗尽测试、最大块分配以及不能睡眠的分配路径。
+ */
+#define PMM_ALLOC_HARD 0x1u
+
+struct page *pmm_alloc_pages_flags(unsigned int order, unsigned int flags);
+
+/*
  * 地址转换：M1 的核心。
  */
 unsigned long page_to_pfn(const struct page *page);
@@ -115,5 +146,16 @@ int page_to_nid(const struct page *page);
 unsigned long pmm_free_count(void);
 unsigned long pmm_total_count(void);
 int pmm_check(void);
+
+/*
+ * M2d: 水位与回收标记。
+ *
+ * pmm_watermark_free() 只返回 buddy 空闲页，不包含 pcp 缓存页；
+ * 水位判断应该基于这个值。
+ */
+bool pmm_watermark_ok(unsigned int order, enum zone_watermark mark);
+unsigned long pmm_watermark_free(void);
+bool pmm_reclaim_needed(void);
+unsigned long pmm_reclaim_wakeups(void);
 
 #endif /* TINY_MM_H */

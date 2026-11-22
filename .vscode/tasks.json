@@ -93,6 +93,37 @@
             ],
             "group": "test",
             "problemMatcher": []
+        },
+        {
+            "label": "tiny-mm: test M2d",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "-C",
+                "${workspaceFolder}/linux_learning/kernel_learning_map/memory/tiny_mm",
+                "test-m2d"
+            ],
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "tiny-mm: build M2d (debug)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "-C",
+                "${workspaceFolder}/linux_learning/kernel_learning_map/memory/tiny_mm",
+                "debug-m2d"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
         }
     ]
 }

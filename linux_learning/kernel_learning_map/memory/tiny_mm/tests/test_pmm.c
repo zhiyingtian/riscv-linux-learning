@@ -9,6 +9,11 @@
 #define TEST_NR_PAGES 64UL
 #define TEST_MAX_ORDER 6U	/* 64 页 => max_order 6 */
 
+static struct page *alloc_hard(unsigned int order)
+{
+	return pmm_alloc_pages_flags(order, PMM_ALLOC_HARD);
+}
+
 static int test_init(void)
 {
 	CHECK(pmm_init(TEST_START_PFN, TEST_NR_PAGES) == 0);
@@ -90,11 +95,11 @@ static int test_exhaust(void)
 	CHECK(pmm_init(TEST_START_PFN, TEST_NR_PAGES) == 0);
 
 	for (i = 0; i < TEST_NR_PAGES; i++) {
-		held[i] = pmm_alloc_pages(0);
+		held[i] = alloc_hard(0);
 		CHECK(held[i] != NULL);
 	}
 
-	CHECK(pmm_alloc_pages(0) == NULL);
+	CHECK(alloc_hard(0) == NULL);
 	CHECK(pmm_free_count() == 0);
 	CHECK(pmm_check() == 0);
 
@@ -221,7 +226,7 @@ static int test_random_stress(void)
 			CHECK(pmm_free_pages(slots[idx], 0) == 0);
 			slots[idx] = NULL;
 		} else {
-			slots[idx] = pmm_alloc_pages(0);
+			slots[idx] = alloc_hard(0);
 			CHECK(slots[idx] != NULL);
 		}
 	}
@@ -337,7 +342,7 @@ static int test_fragmentation(void)
 
 	CHECK(pmm_init(TEST_START_PFN, TEST_NR_PAGES) == 0);
 	for (i = 0; i < TEST_NR_PAGES; i++) {
-		held[i] = pmm_alloc_pages(0);
+		held[i] = alloc_hard(0);
 		CHECK(held[i] != NULL);
 	}
 
@@ -363,7 +368,7 @@ static int test_fragmentation(void)
 	CHECK(pmm_check() == 0);
 
 	/* 全部释放后最大块应恢复；pcp 里的缓存页需要先 drain */
-	big = pmm_alloc_pages(TEST_MAX_ORDER);
+	big = alloc_hard(TEST_MAX_ORDER);
 	CHECK(big != NULL);
 	CHECK(pmm_free_pages(big, TEST_MAX_ORDER) == 0);
 	CHECK(pmm_free_count() == TEST_NR_PAGES);
@@ -378,10 +383,10 @@ static int test_exhaust_high_order(void)
 
 	CHECK(pmm_init(TEST_START_PFN, TEST_NR_PAGES) == 0);
 	for (i = 0; i < TEST_NR_PAGES / 8; i++) {
-		held[i] = pmm_alloc_pages(3);
+		held[i] = alloc_hard(3);
 		CHECK(held[i] != NULL);
 	}
-	CHECK(pmm_alloc_pages(3) == NULL);
+	CHECK(alloc_hard(3) == NULL);
 	CHECK(pmm_free_count() == 0);
 	CHECK(pmm_check() == 0);
 
@@ -420,7 +425,7 @@ static int test_high_order_drains_pcp(void)
 	CHECK(page != NULL);
 	CHECK(pmm_free_pages(page, 0) == 0);	/* pcp 里留 1 页 */
 
-	big = pmm_alloc_pages(TEST_MAX_ORDER);
+	big = alloc_hard(TEST_MAX_ORDER);
 	CHECK(big != NULL);			/* 应先 drain 再分配整块 */
 	CHECK(pmm_free_count() == 0);
 	CHECK(pmm_check() == 0);
@@ -454,7 +459,7 @@ static int test_random_stress_all_orders(void)
 			blocks[k] = blocks[--nr];
 		} else {
 			unsigned int order = (unsigned int)rand() % (TEST_MAX_ORDER + 1);
-			struct page *page = pmm_alloc_pages(order);
+			struct page *page = alloc_hard(order);
 
 			/* 碎片化时高阶失败是允许的，失败不能改状态 */
 			if (page) {
@@ -475,7 +480,7 @@ static int test_random_stress_all_orders(void)
 	CHECK(pmm_free_count() == TEST_NR_PAGES);
 	CHECK(pmm_check() == 0);
 
-	big = pmm_alloc_pages(TEST_MAX_ORDER);
+	big = alloc_hard(TEST_MAX_ORDER);
 	CHECK(big != NULL);
 	CHECK(pmm_free_pages(big, TEST_MAX_ORDER) == 0);
 	CHECK(pmm_free_count() == TEST_NR_PAGES);

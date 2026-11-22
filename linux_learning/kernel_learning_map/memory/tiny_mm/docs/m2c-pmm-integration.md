@@ -100,30 +100,41 @@ M2c 改变了 M1 的语义：
   - `pcp_check()`；
   - 检查 `pcp.buddy == &buddy`；
   - 检查 `pmm.free_count`、`zone.free_count` 与 `buddy.free_count + pcp.count` 一致。
-- 高阶分配失败时先 `pcp_drain_all()` 再重试；drain 只搬页，`free_count` 不变。
+- 高阶分配前先 `pcp_drain_all()`，避免 pcp 缓存页挡住连续块；drain 只搬页，`free_count` 不变。
 - M1 的地址转换、zone/pgdat API 保留。
 
 ## 实现要点（已完成）
 
 ### 1. `pmm_alloc_pages(order)`
 
-实现步骤：
+M2c 的入口是：
+
+```c
+pmm_alloc_pages(order);              /* 普通分配，受 WMARK_MIN 限制 */
+pmm_alloc_pages_flags(order, flags); /* M2d：PMM_ALLOC_HARD 可用预留 */
+```
+
+当前实现步骤：
 
 ```text
-1. order > MAX_ORDER-1 → NULL
-2. order == 0:
+1. order >= MAX_ORDER → NULL
+2. order > 0 且 pcp.count > 0:
+       pcp_drain_all(&g_pmm.pcp)    /* 先搬回 buddy */
+3. 普通分配检查 WMARK_MIN
+4. order == 0:
        page = pcp_alloc_pages(&g_pmm.pcp, 0)
    else:
        page = buddy_alloc(&g_pmm.buddy, order)
-       if page == NULL && pcp.count > 0:
-           pcp_drain_all(&g_pmm.pcp)
-           page = buddy_alloc(&g_pmm.buddy, order)
-3. page == NULL → 返回 NULL（不改 free_count）
-4. 更新：
+5. page == NULL → 返回 NULL（不改 free_count）
+6. 更新：
        g_pmm.free_count -= 1UL << order
-       zone.free_count = g_pmm.free_count
-5. 返回 page
+       zone.free_count -= 1UL << order
+       更新回收标记
+7. 返回 page
 ```
+
+M2d 的 hard 分配会跳过第 3 步的 min 检查，用于耗尽/最大块测试；
+普通业务分配仍然保留 min 预留。
 
 注意：`pcp_alloc_pages()` 内部负责 refill 和设置 `PAGE_ALLOCATED`，不要再改状态。
 
@@ -205,10 +216,10 @@ all tests passed
 5. 全部释放后 `pmm_free_count() == nr_pages`；
 6. 每次操作后 `pmm_check() == 0`。
 
-M2c 完成后还可以加：
+M2c 之后：
 
-- 水位/回收标记（M2 框架要求）；
-- `free_pages[order]` 和 fragmentation 统计。
+- 水位/回收标记已在 M2d 完成；
+- 还可以加 `free_pages[order]` 和 fragmentation 统计。
 
 ## 和 Linux 对照
 
@@ -221,11 +232,8 @@ M2c 完成后还可以加：
 | `pmm_check()` | `check_pages_state()` / `page_owner` 类调试检查 |
 | `free_count` | `zone->free_area` + pcp 计数 |
 
-M2c 只做“接线”，不引入 migratetype、watermark、GFP flag。
+M2c 只做“接线”，不引入 migratetype、watermark、GFP flag；M2d 再在其上补水位和 `PMM_ALLOC_HARD`。
 
 ## 下一步
 
-M2c 已完成并填好 [../reports/M2c.md](../reports/M2c.md)。下一步：
-
-1. 给分配器加水位/回收标记；
-2. 再做 M3：页表/TLB。
+M2c 已完成并填好 [../reports/M2c.md](../reports/M2c.md)。水位/回收标记已在 M2d 完成，下一步进入 M3：页表/TLB。

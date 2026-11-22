@@ -11,8 +11,8 @@
 - [x] `pmm_free_pages()`：order 0 走 pcp，order > 0 走 buddy
 - [x] 高阶 split/merge 回归：order=2/order=3，释放后能合并回 order-6
 - [x] 碎片化与随机压力：10 万次 order 0..6，每次操作后 `pmm_check()`
-- [x] 高阶分配失败时 drain pcp 再重试
-- [ ] 水位/回收标记（留到下一步）
+- [x] 高阶分配前 drain pcp，失败时不再重试
+- [x] 水位/回收标记（M2d 已完成；M2c 全量测试使用 `PMM_ALLOC_HARD`）
 
 ## 2. 当前测试结果
 
@@ -60,7 +60,7 @@ pmm.free_count = buddy.free_count + pcp.count
 
 | 坑 | 现象 | 怎么发现 | 怎么修 |
 |---|---|---|---|
-| pcp 缓存页挡住高阶分配 | 全部释放后 `free_count=64`，order-6 仍返回 NULL | fragmentation 末尾加“最大块恢复”断言 | 高阶分配失败时 drain pcp 再重试 |
+| pcp 缓存页挡住高阶分配 | 全部释放后 `free_count=64`，order-6 仍返回 NULL | fragmentation 末尾加“最大块恢复”断言 | 高阶分配前先 drain pcp |
 | 随机测试只覆盖 order 0 | 高阶 split/merge 没被随机压力覆盖 | 对照 M2 框架验收第 1 条 | 新增 order 0..6 的 10 万次随机测试 |
 | 错 order/非块头释放没有用例 | 只测了 order-0 按 order-1 free | 对照 M2c 文档 §5 | 新增 `free order mismatch` |
 
@@ -83,11 +83,11 @@ pmm.free_count = buddy.free_count + pcp.count
 ## 7. 还没懂的问题
 
 - Linux 在高阶分配失败后走 reclaim/compaction，而不是直接 drain pcp；
-  tiny-mm 采用“失败时 drain 再重试”的简化策略，后续是否需要和 Linux 对齐？
-- 水位/回收标记还没做：min/low/high 与 `GFP_ATOMIC` 的简化模拟。
+  tiny-mm 采用“高阶分配前先 drain pcp”的简化策略，后续是否需要和 Linux 对齐？
+- M2d 已完成水位/回收标记：min/low/high、`PMM_ALLOC_HARD` 与 `GFP_ATOMIC` 的简化模拟。
 
 ## 8. 进入下一阶段前的一句话总结
 
 M2c 已完成：order 0 走 pcp、order > 0 走 buddy，`free_count` 与
-`buddy.free_count + pcp.count` 保持一致，20/20 测试通过；下一步补水位/回收标记，
-然后进入 M3 页表。
+`buddy.free_count + pcp.count` 保持一致，20/20 测试通过；水位/回收标记已在 M2d 完成，
+下一步进入 M3 页表。

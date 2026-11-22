@@ -24,6 +24,7 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 | M0 工具链/测试框架 | ✅ 已搭好 | [docs/m0-toolchain.md](docs/m0-toolchain.md) |
 | M1 物理页模型 | ✅ 已完成（56a96a7） | [docs/m1-physical-pages.md](docs/m1-physical-pages.md) |
 | M2 buddy/pcp | ✅ M2a 完成（11/11）；✅ M2b 完成（9/9）；✅ M2c 完成（20/20） | [docs/m2-buddy.md](docs/m2-buddy.md) · [docs/m2b-pcp.md](docs/m2b-pcp.md) · [docs/m2c-pmm-integration.md](docs/m2c-pmm-integration.md) |
+| M2d 水位/回收标记 | ✅ 已完成（7/7） | [docs/m2d-watermark.md](docs/m2d-watermark.md) |
 | M3 页表/TLB | 未开始 | 框架里的 M3 |
 
 > M1 已完成（历史）：原 `make test` 的 11 个 bitmap 测试已由 M2c 验收替代。
@@ -33,6 +34,8 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 > M2b pcp 已完成：`make test-m2b` 9 个测试全部通过。
 >
 > M2c pmm 集成已完成：order 0 走 pcp、order > 0 走 buddy，`make test-m2c` 20 个测试全部通过。
+>
+> M2d 水位/回收标记已完成：`make test-m2d` 7 个测试全部通过；M2c 回归保持 20/20。
 
 ---
 
@@ -47,6 +50,7 @@ tiny_mm/
 │   ├── m2-buddy.md                 # M2a：buddy split/merge、11 个测试
 │   ├── m2b-pcp.md                  # M2b：pcp refill/high/drain、9 个测试
 │   ├── m2c-pmm-integration.md      # M2c：pmm 接入 buddy + pcp
+│   ├── m2d-watermark.md            # M2d：水位/回收标记
 │   ├── tiny_mm_learning_framework.md # M0–M9 完整框架
 │   └── memory_capstone_tiny_mm.md  # 最初的项目方案
 ├── include/
@@ -54,12 +58,13 @@ tiny_mm/
 │   ├── buddy.h                     # M2a buddy 数据结构/API
 │   └── pcp.h                       # M2b pcp 数据结构/API
 ├── src/
-│   ├── pmm.c                       # M2c：buddy + pcp 集成（已完成）
+│   ├── pmm.c                       # M2c + M2d：buddy/pcp 与水位/回收标记
 │   ├── buddy.c                     # M2a buddy（已完成）
 │   └── pcp.c                       # M2b pcp（已完成）
 ├── tests/
 │   ├── test_runner.h               # M1 测试 runner
 │   ├── test_pmm.c                  # M2c 的 20 个验收测试
+│   ├── test_watermark.c            # M2d 的 7 个水位测试
 │   ├── test_runner_buddy.h         # M2a 测试 runner
 │   ├── test_buddy.c                # M2a 的 11 个验收测试
 │   ├── test_runner_pcp.h           # M2b 测试 runner
@@ -68,7 +73,8 @@ tiny_mm/
 │   ├── M1.md                       # M1 阶段报告模板
 │   ├── M2.md                       # M2a 阶段报告
 │   ├── M2b.md                      # M2b 阶段报告
-│   └── M2c.md                      # M2c 阶段报告
+│   ├── M2c.md                      # M2c 阶段报告
+│   └── M2d.md                      # M2d 阶段报告
 ├── Makefile
 └── .gitignore
 ```
@@ -82,9 +88,10 @@ cd linux_learning/kernel_learning_map/memory/tiny_mm
 make
 make test        # M2c，20/20 通过
 make test-m2c    # 同上，M2c 集成
+make test-m2d    # M2d 水位/回收标记，7/7 通过
 make test-m2     # M2a，11/11 通过
 make test-m2b    # M2b，9/9 通过
-make test-all    # M2c + M2a + M2b
+make test-all    # M2c + M2d + M2a + M2b
 ```
 
 默认带 ASan/UBSan。没有 sanitizer 的环境：
@@ -130,12 +137,13 @@ all tests passed
 - `tiny-mm: debug M2b pcp`
 - `tiny-mm: debug M2 buddy`
 - `tiny-mm: debug M2c pmm`（原 M1 调试配置）
+- `tiny-mm: debug M2d watermark`
 
 使用方式：
 
 1. 安装 VS Code 的 **C/C++** 扩展；
 2. 打开 `src/buddy.c`，在 `buddy_alloc()` / `buddy_free()` 里打断点；
-3. 按 `F5`，选择 `tiny-mm: debug M2b pcp`、`tiny-mm: debug M2 buddy` 或 `tiny-mm: debug M2c pmm`；
+3. 按 `F5`，选择 `tiny-mm: debug M2b pcp`、`tiny-mm: debug M2 buddy`、`tiny-mm: debug M2c pmm` 或 `tiny-mm: debug M2d watermark`；
 4. 启动前会自动执行对应的 debug 构建任务。
 
 调试构建使用独立的 `build-debug/`，并且**关闭 ASan/UBSan**，避免 sanitizer 干扰 gdb：
@@ -154,6 +162,8 @@ make debug-m2b
 make debug-m2
 # 或
 make debug-m2c
+# 或
+make debug-m2d
 ```
 
 普通的 `make test` / `make test-m2` 仍然使用 `build/` 和 sanitizer，两者互不覆盖。
@@ -260,7 +270,7 @@ M2c 把 M1 的 bitmap 分配器切到 buddy + pcp：
 - `pmm_init()` / `pmm_exit()`：初始化、drain pcp 后清理；
 - `pmm_check()`：检查 buddy + pcp + free_count；
 - `pmm_alloc_pages()` / `pmm_free_pages()`：order 0 走 pcp，order > 0 走 buddy；
-- 高阶分配失败时 drain pcp 再重试；
+- 高阶分配前先 drain pcp，避免缓存页挡住连续块；
 - `pmm.free_count = buddy.free_count + pcp.count`。
 
 运行：
@@ -273,7 +283,48 @@ make test-m2c
 
 - [docs/m2c-pmm-integration.md](docs/m2c-pmm-integration.md)
 
-报告见 [reports/M2c.md](reports/M2c.md)；下一步水位/回收标记和 M3。
+报告见 [reports/M2c.md](reports/M2c.md)。
+
+---
+
+## M2d：水位/回收标记
+
+M2d 在 zone 上增加 min/low/high 水位和回收标记：
+
+- `struct zone` 增加 `watermark[NR_WMARK]`、`reclaim_needed`、`reclaim_wakeups`；
+- `pmm_watermark_free()` 只统计 buddy 空闲页，不包含 pcp；
+- `pmm_watermark_ok(order, mark)` 按 order 计算需要页数；
+- `pmm_update_reclaim_state()` 实现 low 置位、high 清零和滞回；
+- 普通分配受 `WMARK_MIN` 限制，`PMM_ALLOC_HARD` 允许使用预留；
+- 高阶分配前 drain pcp，避免缓存页挡住连续块。
+
+运行：
+
+```bash
+make test-m2d
+```
+
+当前 7 个测试全部通过：
+
+```text
+[PASS] init
+[PASS] watermark order
+[PASS] pcp not counted
+[PASS] hard uses reserve
+[PASS] low marks reclaim
+[PASS] high clears reclaim
+[PASS] min blocks alloc
+
+all tests passed
+```
+
+设计说明和 Linux 对照：
+
+- [docs/m2d-watermark.md](docs/m2d-watermark.md)
+
+阶段报告：
+
+- [reports/M2d.md](reports/M2d.md)
 
 ---
 
@@ -284,6 +335,7 @@ make test-m2c
 - [M2a：buddy 分配器](docs/m2-buddy.md)
 - [M2b：pcp](docs/m2b-pcp.md)
 - [M2c：pmm 集成](docs/m2c-pmm-integration.md)
+- [M2d：水位/回收标记](docs/m2d-watermark.md)
 - [tiny-mm 完整学习框架](docs/tiny_mm_learning_framework.md)
 - [最初的项目方案](docs/memory_capstone_tiny_mm.md)
 
