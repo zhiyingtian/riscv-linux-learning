@@ -60,6 +60,7 @@ struct page {
 	bool is_free;		/* 是否在 allocator 的空闲集合里 */
 	unsigned int zone_id;	/* 属于哪个 zone（M1 只有一个 zone） */
 	enum page_state state;	/* 页状态：已分配/在 buddy 空闲链表/在 pcp 链表 */
+	void *pgtable;		/* M3: 页表页内容；普通数据页为 NULL */
 };
 
 struct pglist_data;

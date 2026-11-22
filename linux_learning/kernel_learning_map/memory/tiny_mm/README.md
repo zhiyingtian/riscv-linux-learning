@@ -25,7 +25,7 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 | M1 物理页模型 | ✅ 已完成（56a96a7） | [docs/m1-physical-pages.md](docs/m1-physical-pages.md) |
 | M2 buddy/pcp | ✅ M2a 完成（11/11）；✅ M2b 完成（9/9）；✅ M2c 完成（20/20） | [docs/m2-buddy.md](docs/m2-buddy.md) · [docs/m2b-pcp.md](docs/m2b-pcp.md) · [docs/m2c-pmm-integration.md](docs/m2c-pmm-integration.md) |
 | M2d 水位/回收标记 | ✅ 已完成（7/7） | [docs/m2d-watermark.md](docs/m2d-watermark.md) |
-| M3 页表/TLB | 未开始 | 框架里的 M3 |
+| M3 页表/TLB | 🚧 脚手架（2/8） | [docs/m3-pgtable.md](docs/m3-pgtable.md) |
 
 > M1 已完成（历史）：原 `make test` 的 11 个 bitmap 测试已由 M2c 验收替代。
 >
@@ -38,6 +38,8 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 > M2d 水位/回收标记已完成：`make test-m2d` 7 个测试全部通过；M2c 回归保持 20/20。
 >
 > M2 复盘文档：[docs/m2-review.md](docs/m2-review.md)。
+>
+> M3 两级页表脚手架已搭好：`mm_create()`/`mm_destroy()` 已完成，walk/map/unmap/protect/translate 待实现；`make test-m3` 当前 2/8。
 
 ---
 
@@ -54,6 +56,7 @@ tiny_mm/
 │   ├── m2c-pmm-integration.md      # M2c：pmm 接入 buddy + pcp
 │   ├── m2d-watermark.md            # M2d：水位/回收标记
 │   ├── m2-review.md                # M2 学习复盘：buddy → pcp → pmm → 水位
+│   ├── m3-pgtable.md               # M3：两级页表 + TLB 脚手架
 │   ├── tiny_mm_learning_framework.md # M0–M9 完整框架
 │   └── memory_capstone_tiny_mm.md  # 最初的项目方案
 ├── include/
@@ -62,12 +65,14 @@ tiny_mm/
 │   └── pcp.h                       # M2b pcp 数据结构/API
 ├── src/
 │   ├── pmm.c                       # M2c + M2d：buddy/pcp 与水位/回收标记
+│   ├── pgtable.c                   # M3：两级页表脚手架
 │   ├── buddy.c                     # M2a buddy（已完成）
 │   └── pcp.c                       # M2b pcp（已完成）
 ├── tests/
 │   ├── test_runner.h               # M1 测试 runner
 │   ├── test_pmm.c                  # M2c 的 20 个验收测试
 │   ├── test_watermark.c            # M2d 的 7 个水位测试
+│   ├── test_pgtable.c              # M3 的 8 个页表/TLB 测试
 │   ├── test_runner_buddy.h         # M2a 测试 runner
 │   ├── test_buddy.c                # M2a 的 11 个验收测试
 │   ├── test_runner_pcp.h           # M2b 测试 runner
@@ -77,7 +82,8 @@ tiny_mm/
 │   ├── M2.md                       # M2a 阶段报告
 │   ├── M2b.md                      # M2b 阶段报告
 │   ├── M2c.md                      # M2c 阶段报告
-│   └── M2d.md                      # M2d 阶段报告
+│   ├── M2d.md                      # M2d 阶段报告
+│   └── M3.md                       # M3 阶段报告脚手架
 ├── Makefile
 └── .gitignore
 ```
@@ -94,6 +100,7 @@ make test-m2c    # 同上，M2c 集成
 make test-m2d    # M2d 水位/回收标记，7/7 通过
 make test-m2     # M2a，11/11 通过
 make test-m2b    # M2b，9/9 通过
+make test-m3     # M3 两级页表脚手架，当前 2/8
 make test-all    # M2c + M2d + M2a + M2b
 ```
 
@@ -141,12 +148,13 @@ all tests passed
 - `tiny-mm: debug M2 buddy`
 - `tiny-mm: debug M2c pmm`（原 M1 调试配置）
 - `tiny-mm: debug M2d watermark`
+- `tiny-mm: debug M3 pgtable`
 
 使用方式：
 
 1. 安装 VS Code 的 **C/C++** 扩展；
 2. 打开 `src/buddy.c`，在 `buddy_alloc()` / `buddy_free()` 里打断点；
-3. 按 `F5`，选择 `tiny-mm: debug M2b pcp`、`tiny-mm: debug M2 buddy`、`tiny-mm: debug M2c pmm` 或 `tiny-mm: debug M2d watermark`；
+3. 按 `F5`，选择对应的 `tiny-mm: debug ...` 配置；
 4. 启动前会自动执行对应的 debug 构建任务。
 
 调试构建使用独立的 `build-debug/`，并且**关闭 ASan/UBSan**，避免 sanitizer 干扰 gdb：
@@ -167,6 +175,8 @@ make debug-m2
 make debug-m2c
 # 或
 make debug-m2d
+# 或
+make debug-m3
 ```
 
 普通的 `make test` / `make test-m2` 仍然使用 `build/` 和 sanitizer，两者互不覆盖。
@@ -331,6 +341,57 @@ all tests passed
 
 ---
 
+## M3：两级页表 + TLB（脚手架）
+
+M3 把 vaddr 翻译成 page：
+
+```text
+30 位虚拟地址：
+[ PGD index 9 位 ][ PTE index 9 位 ][ offset 12 位 ]
+```
+
+当前已搭好：
+
+- `include/pgtable.h`：`pte_t`、`struct pte_page`、`struct mm_struct`；
+- `struct page.pgtable`：页表页的 4KB 模拟存储；
+- `mm_create()`：从 pmm 分配 PGD 页；
+- `mm_destroy()`：释放 PGD/PTE 页；
+- `mm_check()` 和统计 getter。
+
+待实现：
+
+- `pgtable_walk(create)`；
+- `mm_map()` / `mm_unmap()` / `mm_protect()` / `mm_translate()`；
+- PTE 修改后的 TLB flush 计数。
+
+运行：
+
+```bash
+make test-m3
+```
+
+当前脚手架预期：
+
+```text
+[PASS] create/destroy
+[PASS] unmapped translate
+[FAIL] map/translate/unmap
+[FAIL] page table pages
+[FAIL] permission
+[FAIL] tlb flush count
+[FAIL] destroy releases tables
+[FAIL] random map/unmap
+
+6 test(s) failed
+```
+
+M3 暂不加入 `test-all`，避免打断 M2 回归。设计、TODO 和 Linux 对照：
+
+- [docs/m3-pgtable.md](docs/m3-pgtable.md)
+- [reports/M3.md](reports/M3.md)
+
+---
+
 ## 文档入口
 
 - [M0：工具链与测试框架](docs/m0-toolchain.md)
@@ -340,6 +401,7 @@ all tests passed
 - [M2c：pmm 集成](docs/m2c-pmm-integration.md)
 - [M2d：水位/回收标记](docs/m2d-watermark.md)
 - [M2 学习复盘：buddy → pcp → pmm → 水位](docs/m2-review.md)
+- [M3：两级页表 + TLB](docs/m3-pgtable.md)
 - [tiny-mm 完整学习框架](docs/tiny_mm_learning_framework.md)
 - [最初的项目方案](docs/memory_capstone_tiny_mm.md)
 
