@@ -51,6 +51,43 @@ static int test_create_destroy(void)
 	return 0;
 }
 
+static int test_pte_encoding(void)
+{
+	pte_t pte = pfn_pte(5, PTE_PRESENT | PTE_WRITE | PTE_USER);
+	pte_t ro;
+	pte_t modified;
+	pgd_t pgd = pfn_pgd(7, PGD_PRESENT);
+
+	CHECK(pmm_init(TEST_START_PFN, TEST_NR_PAGES) == 0);
+
+	CHECK(pte_present(pte));
+	CHECK(pte_write(pte));
+	CHECK(pte_user(pte));
+	CHECK(!pte_none(pte));
+	CHECK(pte_pfn(pte) == 5);
+	CHECK(pte_val(pte) == ((5UL << PTE_PFN_SHIFT) |
+			       PTE_PRESENT | PTE_WRITE | PTE_USER));
+
+	ro = pte_wrprotect(pte);
+	CHECK(pte_present(ro));
+	CHECK(!pte_write(ro));
+	CHECK(pte_pfn(ro) == 5);
+
+	modified = pte_modify(pte, PTE_PRESENT | PTE_USER);
+	CHECK(!pte_write(modified));
+	CHECK(pte_pfn(modified) == 5);
+
+	CHECK(pte_none(__pte(0)));
+
+	CHECK(pgd_present(pgd));
+	CHECK(!pgd_none(pgd));
+	CHECK(pgd_pfn(pgd) == 7);
+	CHECK(pgd_none(__pgd(0)));
+
+	CHECK(pmm_check() == 0);
+	return 0;
+}
+
 static int test_unmapped_translate(void)
 {
 	struct mm_struct *mm;
@@ -263,6 +300,7 @@ int main(void)
 	printf("---------------------------------\n");
 
 	failures += run_test("create/destroy", test_create_destroy);
+	failures += run_test("pte encoding", test_pte_encoding);
 	failures += run_test("unmapped translate", test_unmapped_translate);
 	failures += run_test("map/translate/unmap", test_map_translate_unmap);
 	failures += run_test("page table pages", test_page_table_pages);

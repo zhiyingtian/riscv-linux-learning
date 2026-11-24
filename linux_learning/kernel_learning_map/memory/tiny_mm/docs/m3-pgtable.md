@@ -4,7 +4,7 @@
 > 上一阶段：[m2d-watermark.md](m2d-watermark.md)
 > 状态：**🚧 M3 脚手架已搭好。**
 >
-> 当前 `make test-m3`：`create/destroy` 和 `unmapped translate` 通过；
+> 当前 `make test-m3`：`create/destroy`、`pte encoding` 和 `unmapped translate` 通过；
 > 其余 6 个页表/TLB 测试待实现。
 >
 > 本文档只搭骨架，不直接给完整实现。先把 walk/map/unmap/protect/translate 的语义想清楚。
@@ -72,19 +72,40 @@ mm->pgd
 [`include/pgtable.h`](../include/pgtable.h)：
 
 ```c
-typedef uint64_t pte_t;
+typedef uint64_t pgdval_t;
+typedef uint64_t pteval_t;
+
+typedef struct { pgdval_t pgd; } pgd_t;
+typedef struct { pteval_t pte; } pte_t;
+
+struct pgd_page {
+    pgd_t entries[PGD_ENTRIES];   /* 512 个 PGD entry */
+};
 
 struct pte_page {
-    pte_t entries[PTE_ENTRIES];   /* 512 项，正好 4KB */
+    pte_t entries[PTE_ENTRIES];   /* 512 个 PTE entry */
 };
 
 struct mm_struct {
-    struct page *pgd_page;        /* PGD 页本身，来自 pmm */
-    struct pte_page *pgd;         /* PGD 页内容 */
-    unsigned int page_table_pages;/* PGD + PTE 页数 */
+    struct page *pgd_page;         /* PGD 页本身，来自 pmm */
+    struct pgd_page *pgd;          /* PGD 页内容 */
+    unsigned int page_table_pages; /* PGD + PTE 页数 */
     unsigned long tlb_flush_count;
 };
 ```
+
+这更贴近 Linux：
+
+```c
+pgd_val(pgd);             /* 取 pgd_t 的原始值 */
+pte_val(pte);             /* 取 pte_t 的原始值 */
+__pgd(value);             /* 构造 pgd_t */
+__pte(value);             /* 构造 pte_t */
+pfn_pgd(pfn, flags);      /* 编码 PGD */
+pfn_pte(pfn, flags);      /* 编码 PTE */
+```
+
+Linux 的 `pgd_t`/`pte_t` 也是带类型的包装，而不是到处直接使用裸整数。
 
 ### PTE 编码
 
@@ -100,12 +121,27 @@ PTE_WRITE    0x2
 PTE_USER     0x4
 ```
 
-辅助函数：
+PTE 辅助函数：
 
 ```c
+pte_val(pte);             /* 原始值 */
 pte_pfn(pte);             /* 取 PFN */
 pfn_pte(pfn, flags);      /* 组 PTE */
 pte_present(pte);         /* present 位 */
+pte_write(pte);           /* write 位 */
+pte_mkwrite(pte);         /* 设置 write */
+pte_wrprotect(pte);       /* 清除 write */
+pte_modify(pte, flags);   /* 保留 PFN，改权限 */
+```
+
+PGD 辅助函数：
+
+```c
+pgd_val(pgd);
+pgd_pfn(pgd);
+pfn_pgd(pfn, flags);
+pgd_present(pgd);
+pgd_none(pgd);
 ```
 
 ### 页表页的存储
@@ -160,6 +196,7 @@ MM_ACCESS_READ / MM_ACCESS_WRITE / MM_ACCESS_EXEC
 
 ### 已完成
 
+- Linux 风格的 `pgd_t` / `pte_t`、`pgd_val()` / `pte_val()` 和编码辅助函数；
 - `mm_create()`：分配 PGD 页 + 4KB 页表存储；
 - `mm_destroy()`：遍历 PGD，释放所有 PTE 页和 PGD 页；
 - `mm_tlb_flush_count()` / `mm_page_table_pages()` / `mm_check()`；
@@ -172,7 +209,7 @@ MM_ACCESS_READ / MM_ACCESS_WRITE / MM_ACCESS_EXEC
    - `PGD_INDEX(vaddr)` 取 PGD entry；
    - entry 不存在且 `create=false` → NULL；
    - `create=true` → 从 pmm 分配 PTE 页，初始化 `pgtable` 存储；
-   - 返回 `&pte_page->entries[PTE_INDEX(vaddr)]`。
+   - 返回 `&pte->entries[PTE_INDEX(vaddr)]`。
 
 2. `mm_map()`
    - 校验 vaddr/page；
@@ -203,11 +240,12 @@ MM_ACCESS_READ / MM_ACCESS_WRITE / MM_ACCESS_EXEC
    - `mm_map()` / `mm_unmap()` / `mm_protect()` 修改 PTE 后增加 `tlb_flush_count`；
    - 当前只做计数模拟，不实现真实 TLB 缓存。
 
-## 8 个脚手架测试
+## 9 个脚手架测试
 
 | 测试 | 目标 | 当前 |
 |---|---|---|
 | `create/destroy` | PGD 页从 pmm 来，销毁后归还 | ✅ PASS |
+| `pte encoding` | `pgd_t`/`pte_t` 编码和辅助函数 | ✅ PASS |
 | `unmapped translate` | 未映射返回 NULL | ✅ PASS |
 | `map/translate/unmap` | map 后 translate 返回同一个 page，unmap 后 NULL | ❌ TODO |
 | `page table pages` | 同一 PTE 页复用，不同 PGD 新建 PTE 页 | ❌ TODO |
@@ -220,6 +258,7 @@ MM_ACCESS_READ / MM_ACCESS_WRITE / MM_ACCESS_EXEC
 
 ```text
 [PASS] create/destroy
+[PASS] pte encoding
 [PASS] unmapped translate
 [FAIL] map/translate/unmap
 [FAIL] page table pages
@@ -231,7 +270,7 @@ MM_ACCESS_READ / MM_ACCESS_WRITE / MM_ACCESS_EXEC
 6 test(s) failed
 ```
 
-这是脚手架状态；实现 TODO 后应变成 8/8。
+这是脚手架状态；实现 TODO 后应变成 9/9。
 
 ## 运行
 
@@ -253,7 +292,7 @@ make debug-m3
 
 ## 实现建议
 
-先按这个顺序做，避免一次改太多：
+先实现 `pgtable_walk()`，再按这个顺序做：
 
 ```text
 1. pgtable_walk(create=false)：只查 PGD，不分配

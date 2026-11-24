@@ -1,6 +1,8 @@
 #include "pgtable.h"
+#include "tmm.h"
 
 #include <errno.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -57,7 +59,7 @@ struct mm_struct *mm_create(void)
 		return NULL;
 	}
 
-	mm->pgd = mm->pgd_page->pgtable;
+	mm->pgd = (struct pgd_page *)mm->pgd_page->pgtable;
 	mm->page_table_pages = 1;
 	mm->tlb_flush_count = 0;
 
@@ -73,18 +75,18 @@ void mm_destroy(struct mm_struct *mm)
 
 	if (mm->pgd) {
 		for (i = 0; i < PGD_ENTRIES; i++) {
-			pte_t entry = mm->pgd->entries[i];
+			pgd_t entry = mm->pgd->entries[i];
 			struct page *pte_page;
 
-			if (!pte_present(entry))
+			if (!pgd_present(entry))
 				continue;
 
-			pte_page = pfn_to_page(pte_pfn(entry));
+			pte_page = pfn_to_page(pgd_pfn(entry));
 			if (!pte_page)
 				continue;
 
 			pgtable_free_page(pte_page);
-			mm->pgd->entries[i] = 0;
+			mm->pgd->entries[i] = __pgd(0);
 			if (mm->page_table_pages > 0)
 				mm->page_table_pages--;
 		}
@@ -95,14 +97,12 @@ void mm_destroy(struct mm_struct *mm)
 }
 
 /*
- * TODO(M3): 按 vaddr 找到 PTE。
+ * TODO(M3): 按 vaddr 找 PTE。
  *
- * 期望步骤：
- *   1. 校验 mm/vaddr/对齐；
- *   2. 用 PGD_INDEX(vaddr) 取 PGD entry；
- *   3. entry 不存在且 create=false → 返回 NULL；
- *   4. create=true 时从 pmm 分配 PTE 页，初始化 pgtable 存储；
- *   5. 返回 &pte_page->entries[PTE_INDEX(vaddr)]。
+ * create=false：只查找；PTE 页不存在时返回 NULL。
+ * create=true ：PTE 页不存在时，从 pmm 分配一页并写入 PGD entry。
+ *
+ * 注意：create=true 创建的是“PTE 页”，不是数据页。
  */
 static pte_t *pgtable_walk(struct mm_struct *mm, unsigned long vaddr,
 			   bool create)
@@ -174,7 +174,7 @@ int mm_check(const struct mm_struct *mm)
 {
 	if (!mm || !mm->pgd_page || !mm->pgd)
 		return -EINVAL;
-	if (mm->pgd_page->pgtable != mm->pgd)
+	if (mm->pgd_page->pgtable != (void *)mm->pgd)
 		return -EINVAL;
 
 	return 0;

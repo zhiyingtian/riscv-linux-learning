@@ -25,7 +25,7 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 | M1 物理页模型 | ✅ 已完成（56a96a7） | [docs/m1-physical-pages.md](docs/m1-physical-pages.md) |
 | M2 buddy/pcp | ✅ M2a 完成（11/11）；✅ M2b 完成（9/9）；✅ M2c 完成（20/20） | [docs/m2-buddy.md](docs/m2-buddy.md) · [docs/m2b-pcp.md](docs/m2b-pcp.md) · [docs/m2c-pmm-integration.md](docs/m2c-pmm-integration.md) |
 | M2d 水位/回收标记 | ✅ 已完成（7/7） | [docs/m2d-watermark.md](docs/m2d-watermark.md) |
-| M3 页表/TLB | 🚧 脚手架（2/8） | [docs/m3-pgtable.md](docs/m3-pgtable.md) |
+| M3 页表/TLB | 🚧 脚手架（3/9） | [docs/m3-pgtable.md](docs/m3-pgtable.md) |
 
 > M1 已完成（历史）：原 `make test` 的 11 个 bitmap 测试已由 M2c 验收替代。
 >
@@ -39,7 +39,7 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 >
 > M2 复盘文档：[docs/m2-review.md](docs/m2-review.md)。
 >
-> M3 两级页表脚手架已搭好：`mm_create()`/`mm_destroy()` 已完成，walk/map/unmap/protect/translate 待实现；`make test-m3` 当前 2/8。
+> M3 两级页表脚手架已搭好：Linux 风格 `pgd_t`/`pte_t`、`mm_create()`/`mm_destroy()` 已完成，walk/map/unmap/protect/translate 待实现；`make test-m3` 当前 3/9。
 
 ---
 
@@ -72,7 +72,7 @@ tiny_mm/
 │   ├── test_runner.h               # M1 测试 runner
 │   ├── test_pmm.c                  # M2c 的 20 个验收测试
 │   ├── test_watermark.c            # M2d 的 7 个水位测试
-│   ├── test_pgtable.c              # M3 的 8 个页表/TLB 测试
+│   ├── test_pgtable.c              # M3 的 9 个页表/TLB 测试
 │   ├── test_runner_buddy.h         # M2a 测试 runner
 │   ├── test_buddy.c                # M2a 的 11 个验收测试
 │   ├── test_runner_pcp.h           # M2b 测试 runner
@@ -100,7 +100,7 @@ make test-m2c    # 同上，M2c 集成
 make test-m2d    # M2d 水位/回收标记，7/7 通过
 make test-m2     # M2a，11/11 通过
 make test-m2b    # M2b，9/9 通过
-make test-m3     # M3 两级页表脚手架，当前 2/8
+make test-m3     # M3 两级页表脚手架，当前 3/9
 make test-all    # M2c + M2d + M2a + M2b
 ```
 
@@ -374,6 +374,7 @@ make test-m3
 
 ```text
 [PASS] create/destroy
+[PASS] pte encoding
 [PASS] unmapped translate
 [FAIL] map/translate/unmap
 [FAIL] page table pages
