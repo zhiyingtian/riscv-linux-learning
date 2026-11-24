@@ -97,7 +97,7 @@ void mm_destroy(struct mm_struct *mm)
 }
 
 /*
- * TODO(M3): 按 vaddr 找 PTE。
+ * M3: 按 vaddr 找 PTE。
  *
  * create=false：只查找；PTE 页不存在时返回 NULL。
  * create=true ：PTE 页不存在时，从 pmm 分配一页并写入 PGD entry。
@@ -107,24 +107,91 @@ void mm_destroy(struct mm_struct *mm)
 static pte_t *pgtable_walk(struct mm_struct *mm, unsigned long vaddr,
 			   bool create)
 {
-	(void)mm;
-	(void)vaddr;
-	(void)create;
+	unsigned long pgd_index;
+	pgd_t pgd_entry;
+	struct page *pte_page;
+	struct pte_page *pt;
 
-	return NULL;
+	if (!mm || !mm->pgd || !mm->pgd_page)
+		return NULL;
+
+	if ((vaddr & (PAGE_SIZE - 1)) != 0)
+		return NULL;
+	if (vaddr >= VADDR_LIMIT)
+		return NULL;
+
+	pgd_index = PGD_INDEX(vaddr);
+	pgd_entry = mm->pgd->entries[pgd_index];
+
+	/*
+	PGD 页
+	entries[pgd_index]  → 指向一个 PTE 页（PFN + flags）
+	PTE 页
+	entries[pte_index]  → 指向真正的数据页（PFN + flags）
+	*/
+
+	if (!pgd_none(pgd_entry)) {
+		if (!pgd_present(pgd_entry))
+			// pgd_entry存在，但present为0，表示无效，直接返回
+			return NULL;
+
+		pte_page = pfn_to_page(pgd_pfn(pgd_entry));
+		if (!pte_page || !pte_page->pgtable)
+			return NULL;
+
+		pt = pte_page->pgtable;
+		return &pt->entries[PTE_INDEX(vaddr)];
+	}
+
+	if (!create)
+		return NULL;
+
+	pte_page = pgtable_alloc_page();
+	if (!pte_page)
+		return NULL;
+
+	mm->pgd->entries[pgd_index] =
+		pfn_pgd(page_to_pfn(pte_page), PGD_PRESENT);
+	mm->page_table_pages++;
+
+	pt = pte_page->pgtable;
+	return &pt->entries[PTE_INDEX(vaddr)];
 }
 
 int mm_map(struct mm_struct *mm, unsigned long vaddr, struct page *page,
 	   unsigned int prot)
 {
-	pte_t *pte = pgtable_walk(mm, vaddr, true);
+	pte_t *pte;
+	unsigned long flags;
 
-	(void)page;
-	(void)prot;
-	(void)pte;
+	if (!mm || !page)
+		return -EINVAL;
 
-	/* 留空：M3 的实现练习。 */
-	return -ENOSYS;
+	if ((vaddr & (PAGE_SIZE - 1)) != 0)
+		return -EINVAL;
+
+	if (vaddr >= VADDR_LIMIT)
+		return -EINVAL;
+
+	if (page->state != PAGE_ALLOCATED)
+		return -EINVAL;
+
+	pte = pgtable_walk(mm, vaddr, true);
+	if (!pte)
+		return -ENOMEM;
+
+	/* 同一个 vaddr 不能重复映射。 */
+	if (pte_present(*pte))
+		return -EEXIST;
+
+	flags = PTE_PRESENT | PTE_USER;
+	if (prot & MM_PROT_WRITE)
+		flags |= PTE_WRITE;
+
+	*pte = pfn_pte(page_to_pfn(page), flags);
+	mm->tlb_flush_count++;
+
+	return 0;
 }
 
 int mm_unmap(struct mm_struct *mm, unsigned long vaddr)
