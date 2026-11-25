@@ -403,6 +403,7 @@ M3 暂不加入 `test-all`，避免打断 M2 回归。设计、TODO 和 Linux �
 - [M2d：水位/回收标记](docs/m2d-watermark.md)
 - [M2 学习复盘：buddy → pcp → pmm → 水位](docs/m2-review.md)
 - [M3：两级页表 + TLB](docs/m3-pgtable.md)
+- [M3 页表与 PFN 问答](docs/m3-pgtable-qa.md)
 - [tiny-mm 完整学习框架](docs/tiny_mm_learning_framework.md)
 - [最初的项目方案](docs/memory_capstone_tiny_mm.md)
 

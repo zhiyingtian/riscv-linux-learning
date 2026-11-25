@@ -351,6 +351,10 @@ Linux 还有：
 5. **只读页忽略 PTE_WRITE** → `permission` 失败；
 6. **walk 不校验对齐** → 非法地址也应返回 `-EINVAL`。
 
+## 延伸阅读
+
+- [M3 页表与 PFN 问答](m3-pgtable-qa.md)：`struct page`、页表页、`page_address()`、`virt_to_page()` 和 PFN 视角。
+
 ## 下一步
 
 M3 完成后：
