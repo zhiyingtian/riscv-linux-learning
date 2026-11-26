@@ -203,11 +203,15 @@ struct pte_page {
  * M4 会在这里继续加入 VMA 链表、mmap_lock 等字段。
  * 当前只关心页表根和 TLB 统计。
  */
+struct vm_area_struct;
+
 struct mm_struct {
 	struct page *pgd_page;		/* PGD 页本身，来自 pmm */
 	struct pgd_page *pgd;		/* PGD 页内容 */
 	unsigned int page_table_pages;	/* PGD + 已分配的 PTE 页数 */
 	unsigned long tlb_flush_count;	/* TLB flush 次数模拟 */
+
+	struct vm_area_struct *vma_list; /* M4: 按 vm_start 有序的 VMA 链表头 */
 };
 
 #define PGD_INDEX(vaddr) \

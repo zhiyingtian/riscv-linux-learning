@@ -26,6 +26,7 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 | M2 buddy/pcp | ✅ M2a 完成（11/11）；✅ M2b 完成（9/9）；✅ M2c 完成（20/20） | [docs/m2-buddy.md](docs/m2-buddy.md) · [docs/m2b-pcp.md](docs/m2b-pcp.md) · [docs/m2c-pmm-integration.md](docs/m2c-pmm-integration.md) |
 | M2d 水位/回收标记 | ✅ 已完成（7/7） | [docs/m2d-watermark.md](docs/m2d-watermark.md) |
 | M3 页表/TLB | ✅ 已完成（10/10） | [docs/m3-pgtable.md](docs/m3-pgtable.md) |
+| M4 VMA/缺页 | 🚧 脚手架 | [docs/m4-vma.md](docs/m4-vma.md) |
 
 > M1 已完成（历史）：原 `make test` 的 11 个 bitmap 测试已由 M2c 验收替代。
 >
@@ -40,6 +41,8 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 > M2 复盘文档：[docs/m2-review.md](docs/m2-review.md)。
 >
 > M3 两级页表已完成：`pgtable_walk`、map/unmap/protect/translate、read/write/exec 权限和 TLB flush 计数都实现了；`make test-m3` 10 个测试全部通过。
+>
+> M4 VMA/缺页脚手架已搭好：`struct vm_area_struct`、`find_vma`、`mm_mmap`/`mm_munmap`/`mm_mprotect`/`mm_access` 待实现；`make test-m4` 当前 8 个待实现。
 
 ---
 
@@ -57,15 +60,19 @@ tiny_mm/
 │   ├── m2d-watermark.md            # M2d：水位/回收标记
 │   ├── m2-review.md                # M2 学习复盘：buddy → pcp → pmm → 水位
 │   ├── m3-pgtable.md               # M3：两级页表 + TLB
+│   ├── m4-vma.md                   # M4：VMA + 缺页
 │   ├── tiny_mm_learning_framework.md # M0–M9 完整框架
 │   └── memory_capstone_tiny_mm.md  # 最初的项目方案
 ├── include/
 │   ├── tmm.h                       # 数据结构与 API
 │   ├── buddy.h                     # M2a buddy 数据结构/API
-│   └── pcp.h                       # M2b pcp 数据结构/API
+│   ├── pcp.h                       # M2b pcp 数据结构/API
+│   ├── pgtable.h                   # M3 页表数据结构/API
+│   └── vma.h                       # M4 VMA 数据结构/API
 ├── src/
 │   ├── pmm.c                       # M2c + M2d：buddy/pcp 与水位/回收标记
 │   ├── pgtable.c                   # M3：两级页表（已完成）
+│   ├── vma.c                       # M4：VMA + 缺页（脚手架）
 │   ├── buddy.c                     # M2a buddy（已完成）
 │   └── pcp.c                       # M2b pcp（已完成）
 ├── tests/
@@ -73,6 +80,7 @@ tiny_mm/
 │   ├── test_pmm.c                  # M2c 的 20 个验收测试
 │   ├── test_watermark.c            # M2d 的 7 个水位测试
 │   ├── test_pgtable.c              # M3 的 10 个页表/TLB 测试
+│   ├── test_vma.c                  # M4 的 10 个 VMA/缺页测试
 │   ├── test_runner_buddy.h         # M2a 测试 runner
 │   ├── test_buddy.c                # M2a 的 11 个验收测试
 │   ├── test_runner_pcp.h           # M2b 测试 runner
@@ -83,7 +91,8 @@ tiny_mm/
 │   ├── M2b.md                      # M2b 阶段报告
 │   ├── M2c.md                      # M2c 阶段报告
 │   ├── M2d.md                      # M2d 阶段报告
-│   └── M3.md                       # M3 阶段报告
+│   ├── M3.md                       # M3 阶段报告
+│   └── M4.md                       # M4 阶段报告脚手架
 ├── Makefile
 └── .gitignore
 ```
@@ -101,6 +110,7 @@ make test-m2d    # M2d 水位/回收标记，7/7 通过
 make test-m2     # M2a，11/11 通过
 make test-m2b    # M2b，9/9 通过
 make test-m3     # M3 两级页表，10/10 通过
+make test-m4     # M4 VMA/缺页脚手架，待实现
 make test-all    # M2c + M2d + M3 + M2a + M2b
 ```
 
@@ -389,6 +399,38 @@ all tests passed
 
 ---
 
+## M4：VMA + 缺页（脚手架）
+
+M4 在 M3 的页表上增加 VMA 层，回答“一段 vaddr 是否映射、以什么权限映射”：
+
+```text
+mm_mmap(vaddr, len, prot)   → 建 VMA（惰性，不写 PTE）
+mm_access(vaddr, access)    → find_vma → 权限检查 → 缺页分配匿名页
+```
+
+已搭好：
+
+- `include/vma.h`：`struct vm_area_struct`、VM flags、API 声明；
+- `struct mm_struct.vma_list`：有序 VMA 链表头；
+- `tests/test_vma.c`：10 个验收测试。
+
+待实现：
+
+- `find_vma` / `mm_mmap` / `mm_munmap` / `mm_mprotect` / `mm_access`。
+
+运行：
+
+```bash
+make test-m4
+```
+
+M4 暂不加入 `test-all`。设计、TODO 和 Linux 对照：
+
+- [docs/m4-vma.md](docs/m4-vma.md)
+- [reports/M4.md](reports/M4.md)
+
+---
+
 ## 文档入口
 
 - [M0：工具链与测试框架](docs/m0-toolchain.md)
@@ -400,6 +442,7 @@ all tests passed
 - [M2 学习复盘：buddy → pcp → pmm → 水位](docs/m2-review.md)
 - [M3：两级页表 + TLB](docs/m3-pgtable.md)
 - [M3 页表与 PFN 问答](docs/m3-pgtable-qa.md)
+- [M4：VMA + 缺页](docs/m4-vma.md)
 - [tiny-mm 完整学习框架](docs/tiny_mm_learning_framework.md)
 - [最初的项目方案](docs/memory_capstone_tiny_mm.md)
 

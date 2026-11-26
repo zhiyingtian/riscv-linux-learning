@@ -257,6 +257,8 @@ tiny_mm/
 
 ### M4：VMA + 缺页（4–5 天）
 
+> 当前进度：M4 脚手架已搭好（`make test-m4` 待实现），入口：[m4-vma.md](m4-vma.md)。
+
 **知识点**
 
 - `mm_struct`：VMA 链表/树、`mm_users/mm_count`、`mmap_lock`；
