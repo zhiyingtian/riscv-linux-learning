@@ -89,7 +89,7 @@ test-m2: $(M2_TARGET)
 test-m2b: $(M2B_TARGET)
 	./$(M2B_TARGET)
 
-test-all: test-m2c test-m2d test-m2 test-m2b
+test-all: test-m2c test-m2d test-m3 test-m2 test-m2b
 
 debug-m2c:
 	$(MAKE) BUILD_DIR=$(DEBUG_BUILD_DIR) clean

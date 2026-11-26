@@ -158,7 +158,7 @@ tiny_mm/
 >
 > M2 复盘：[m2-review.md](m2-review.md)。
 >
-> M3 两级页表脚手架已搭好（`make test-m3` 当前 3/9），入口：[m3-pgtable.md](m3-pgtable.md)。
+> M3 两级页表已完成（`make test-m3` 10/10），入口：[m3-pgtable.md](m3-pgtable.md)。
 >
 > 入口：[m2-buddy.md](m2-buddy.md) · [m2b-pcp.md](m2b-pcp.md)
 

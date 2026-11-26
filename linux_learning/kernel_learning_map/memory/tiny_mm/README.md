@@ -25,7 +25,7 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 | M1 物理页模型 | ✅ 已完成（56a96a7） | [docs/m1-physical-pages.md](docs/m1-physical-pages.md) |
 | M2 buddy/pcp | ✅ M2a 完成（11/11）；✅ M2b 完成（9/9）；✅ M2c 完成（20/20） | [docs/m2-buddy.md](docs/m2-buddy.md) · [docs/m2b-pcp.md](docs/m2b-pcp.md) · [docs/m2c-pmm-integration.md](docs/m2c-pmm-integration.md) |
 | M2d 水位/回收标记 | ✅ 已完成（7/7） | [docs/m2d-watermark.md](docs/m2d-watermark.md) |
-| M3 页表/TLB | 🚧 脚手架（3/9） | [docs/m3-pgtable.md](docs/m3-pgtable.md) |
+| M3 页表/TLB | ✅ 已完成（10/10） | [docs/m3-pgtable.md](docs/m3-pgtable.md) |
 
 > M1 已完成（历史）：原 `make test` 的 11 个 bitmap 测试已由 M2c 验收替代。
 >
@@ -39,7 +39,7 @@ mm_struct → VMA → 页表/PTE → PFN → struct page
 >
 > M2 复盘文档：[docs/m2-review.md](docs/m2-review.md)。
 >
-> M3 两级页表脚手架已搭好：Linux 风格 `pgd_t`/`pte_t`、`mm_create()`/`mm_destroy()` 已完成，walk/map/unmap/protect/translate 待实现；`make test-m3` 当前 3/9。
+> M3 两级页表已完成：`pgtable_walk`、map/unmap/protect/translate、read/write/exec 权限和 TLB flush 计数都实现了；`make test-m3` 10 个测试全部通过。
 
 ---
 
@@ -56,7 +56,7 @@ tiny_mm/
 │   ├── m2c-pmm-integration.md      # M2c：pmm 接入 buddy + pcp
 │   ├── m2d-watermark.md            # M2d：水位/回收标记
 │   ├── m2-review.md                # M2 学习复盘：buddy → pcp → pmm → 水位
-│   ├── m3-pgtable.md               # M3：两级页表 + TLB 脚手架
+│   ├── m3-pgtable.md               # M3：两级页表 + TLB
 │   ├── tiny_mm_learning_framework.md # M0–M9 完整框架
 │   └── memory_capstone_tiny_mm.md  # 最初的项目方案
 ├── include/
@@ -65,14 +65,14 @@ tiny_mm/
 │   └── pcp.h                       # M2b pcp 数据结构/API
 ├── src/
 │   ├── pmm.c                       # M2c + M2d：buddy/pcp 与水位/回收标记
-│   ├── pgtable.c                   # M3：两级页表脚手架
+│   ├── pgtable.c                   # M3：两级页表（已完成）
 │   ├── buddy.c                     # M2a buddy（已完成）
 │   └── pcp.c                       # M2b pcp（已完成）
 ├── tests/
 │   ├── test_runner.h               # M1 测试 runner
 │   ├── test_pmm.c                  # M2c 的 20 个验收测试
 │   ├── test_watermark.c            # M2d 的 7 个水位测试
-│   ├── test_pgtable.c              # M3 的 9 个页表/TLB 测试
+│   ├── test_pgtable.c              # M3 的 10 个页表/TLB 测试
 │   ├── test_runner_buddy.h         # M2a 测试 runner
 │   ├── test_buddy.c                # M2a 的 11 个验收测试
 │   ├── test_runner_pcp.h           # M2b 测试 runner
@@ -83,7 +83,7 @@ tiny_mm/
 │   ├── M2b.md                      # M2b 阶段报告
 │   ├── M2c.md                      # M2c 阶段报告
 │   ├── M2d.md                      # M2d 阶段报告
-│   └── M3.md                       # M3 阶段报告脚手架
+│   └── M3.md                       # M3 阶段报告
 ├── Makefile
 └── .gitignore
 ```
@@ -100,8 +100,8 @@ make test-m2c    # 同上，M2c 集成
 make test-m2d    # M2d 水位/回收标记，7/7 通过
 make test-m2     # M2a，11/11 通过
 make test-m2b    # M2b，9/9 通过
-make test-m3     # M3 两级页表脚手架，当前 3/9
-make test-all    # M2c + M2d + M2a + M2b
+make test-m3     # M3 两级页表，10/10 通过
+make test-all    # M2c + M2d + M3 + M2a + M2b
 ```
 
 默认带 ASan/UBSan。没有 sanitizer 的环境：
@@ -341,7 +341,7 @@ all tests passed
 
 ---
 
-## M3：两级页表 + TLB（脚手架）
+## M3：两级页表 + TLB（已完成）
 
 M3 把 vaddr 翻译成 page：
 
@@ -350,19 +350,14 @@ M3 把 vaddr 翻译成 page：
 [ PGD index 9 位 ][ PTE index 9 位 ][ offset 12 位 ]
 ```
 
-当前已搭好：
+已实现：
 
-- `include/pgtable.h`：`pte_t`、`struct pte_page`、`struct mm_struct`；
+- `include/pgtable.h`：`pgd_t`/`pte_t`、`struct pgd_page`/`struct pte_page`/`struct mm_struct`，以及 `PTE_READ/WRITE/EXEC` 权限位；
 - `struct page.pgtable`：页表页的 4KB 模拟存储；
-- `mm_create()`：从 pmm 分配 PGD 页；
-- `mm_destroy()`：释放 PGD/PTE 页；
-- `mm_check()` 和统计 getter。
-
-待实现：
-
-- `pgtable_walk(create)`；
+- `pgtable_walk(create)`：按需分配 PTE 页；
 - `mm_map()` / `mm_unmap()` / `mm_protect()` / `mm_translate()`；
-- PTE 修改后的 TLB flush 计数。
+- PTE 修改后的 TLB flush 计数；
+- `mm_check()`：遍历 PGD 并校验页表页计数。
 
 运行：
 
@@ -370,23 +365,24 @@ M3 把 vaddr 翻译成 page：
 make test-m3
 ```
 
-当前脚手架预期：
+当前 10 个测试全部通过：
 
 ```text
 [PASS] create/destroy
 [PASS] pte encoding
 [PASS] unmapped translate
-[FAIL] map/translate/unmap
-[FAIL] page table pages
-[FAIL] permission
-[FAIL] tlb flush count
-[FAIL] destroy releases tables
-[FAIL] random map/unmap
-
-6 test(s) failed
+[PASS] map/translate/unmap
+[PASS] page table pages
+[PASS] permission
+[PASS] tlb flush count
+[PASS] destroy releases tables
+[PASS] random map/unmap
+[PASS] error paths
+---------------------------------
+all tests passed
 ```
 
-M3 暂不加入 `test-all`，避免打断 M2 回归。设计、TODO 和 Linux 对照：
+`make test-all` 已包含 M3。设计、验收和 Linux 对照：
 
 - [docs/m3-pgtable.md](docs/m3-pgtable.md)
 - [reports/M3.md](reports/M3.md)

@@ -9,15 +9,13 @@
 /*
  * tiny-mm / M3: 两级页表
  *
- * 已完成的脚手架部分：
+ * 已实现：
  *   - mm_create()：从 pmm 分配 PGD 页，并分配页表存储；
  *   - mm_destroy()：释放所有 PTE 页和 PGD 页；
- *   - 统计/自检 getter。
- *
- * TODO(M3):
  *   - pgtable_walk()：按 vaddr 找 PTE，create 时按需分配 PTE 页；
  *   - mm_map()/mm_unmap()/mm_protect()/mm_translate()；
- *   - 修改 PTE 后的 TLB flush 计数。
+ *   - 修改 PTE 后的 TLB flush 计数；
+ *   - mm_check()：自检 PGD 遍历与页表页计数。
  */
 
 static struct page *pgtable_alloc_page(void)
@@ -185,8 +183,12 @@ int mm_map(struct mm_struct *mm, unsigned long vaddr, struct page *page,
 		return -EEXIST;
 
 	flags = PTE_PRESENT | PTE_USER;
+	if (prot & MM_PROT_READ)
+		flags |= PTE_READ;
 	if (prot & MM_PROT_WRITE)
 		flags |= PTE_WRITE;
+	if (prot & MM_PROT_EXEC)
+		flags |= PTE_EXEC;
 
 	*pte = pfn_pte(page_to_pfn(page), flags);
 	mm->tlb_flush_count++;
@@ -196,23 +198,54 @@ int mm_map(struct mm_struct *mm, unsigned long vaddr, struct page *page,
 
 int mm_unmap(struct mm_struct *mm, unsigned long vaddr)
 {
-	pte_t *pte = pgtable_walk(mm, vaddr, false);
+	pte_t *pte;
 
-	(void)pte;
+	if (!mm)
+		return -EINVAL;
 
-	/* 留空：M3 的实现练习。 */
-	return -ENOSYS;
+	if ((vaddr & (PAGE_SIZE - 1)) != 0)
+		return -EINVAL;
+
+	if (vaddr >= VADDR_LIMIT)
+		return -EINVAL;
+
+	pte = pgtable_walk(mm, vaddr, false);
+	if (!pte || !pte_present(*pte))
+		return -ENOENT;
+
+	*pte = __pte(0);  // 清除 PTE
+	mm->tlb_flush_count++;
+
+	return 0;
 }
 
 int mm_protect(struct mm_struct *mm, unsigned long vaddr, unsigned int prot)
 {
-	pte_t *pte = pgtable_walk(mm, vaddr, false);
+	pte_t *pte;
+	unsigned long flags;
 
-	(void)prot;
-	(void)pte;
+	if (!mm)
+		return -EINVAL;
 
-	/* 留空：M3 的实现练习。 */
-	return -ENOSYS;
+	if ((vaddr & (PAGE_SIZE - 1)) != 0 || vaddr >= VADDR_LIMIT)
+		return -EINVAL;
+
+	pte = pgtable_walk(mm, vaddr, false);
+	if (!pte || !pte_present(*pte))
+		return -ENOENT;
+
+	flags = PTE_PRESENT | PTE_USER;
+	if (prot & MM_PROT_READ)
+		flags |= PTE_READ;
+	if (prot & MM_PROT_WRITE)
+		flags |= PTE_WRITE;
+	if (prot & MM_PROT_EXEC)
+		flags |= PTE_EXEC;
+
+	*pte = pte_modify(*pte, flags);
+	mm->tlb_flush_count++;
+
+	return 0;
 }
 
 struct page *mm_translate(struct mm_struct *mm, unsigned long vaddr,
@@ -220,11 +253,22 @@ struct page *mm_translate(struct mm_struct *mm, unsigned long vaddr,
 {
 	pte_t *pte = pgtable_walk(mm, vaddr, false);
 
-	(void)access;
-	(void)pte;
+	if (!pte)
+		return NULL;
 
-	/* 留空：M3 的实现练习。 */
-	return NULL;
+	if (!pte_present(*pte))
+		return NULL;
+
+	if ((access & MM_ACCESS_WRITE) && !pte_write(*pte))
+		return NULL;
+
+	if ((access & MM_ACCESS_READ) && !pte_read(*pte))
+		return NULL;
+
+	if ((access & MM_ACCESS_EXEC) && !pte_exec(*pte))
+		return NULL;
+
+	return pfn_to_page(pte_pfn(*pte));
 }
 
 unsigned long mm_tlb_flush_count(const struct mm_struct *mm)
@@ -239,9 +283,33 @@ unsigned int mm_page_table_pages(const struct mm_struct *mm)
 
 int mm_check(const struct mm_struct *mm)
 {
+	unsigned int i;
+	unsigned int pte_pages = 0;
+
 	if (!mm || !mm->pgd_page || !mm->pgd)
 		return -EINVAL;
 	if (mm->pgd_page->pgtable != (void *)mm->pgd)
+		return -EINVAL;
+
+	/* 遍历 PGD：每个 present entry 必须指向一个有效的 PTE 页。 */
+	for (i = 0; i < PGD_ENTRIES; i++) {
+		pgd_t entry = mm->pgd->entries[i];
+		struct page *pte_page;
+
+		if (pgd_none(entry))
+			continue;
+		if (!pgd_present(entry))
+			return -EINVAL;
+
+		pte_page = pfn_to_page(pgd_pfn(entry));
+		if (!pte_page || !pte_page->pgtable)
+			return -EINVAL;
+
+		pte_pages++;
+	}
+
+	/* page_table_pages = 1 个 PGD + 已分配的 PTE 页数。 */
+	if (mm->page_table_pages != pte_pages + 1)
 		return -EINVAL;
 
 	return 0;

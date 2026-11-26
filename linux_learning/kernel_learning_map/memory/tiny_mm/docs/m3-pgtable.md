@@ -1,13 +1,10 @@
-# M3：两级页表 + TLB 脚手架
+# M3：两级页表 + TLB
 
 > 项目总入口：[../README.md](../README.md)
 > 上一阶段：[m2d-watermark.md](m2d-watermark.md)
-> 状态：**🚧 M3 脚手架已搭好。**
+> 状态：**✅ M3 已完成。**
 >
-> 当前 `make test-m3`：`create/destroy`、`pte encoding` 和 `unmapped translate` 通过；
-> 其余 6 个页表/TLB 测试待实现。
->
-> 本文档只搭骨架，不直接给完整实现。先把 walk/map/unmap/protect/translate 的语义想清楚。
+> 当前 `make test-m3`：10 个页表/TLB 测试全部通过，并已加入 `make test-all`。
 
 ## 目标
 
@@ -119,6 +116,8 @@ Linux 的 `pgd_t`/`pte_t` 也是带类型的包装，而不是到处直接使用
 PTE_PRESENT  0x1
 PTE_WRITE    0x2
 PTE_USER     0x4
+PTE_READ     0x8
+PTE_EXEC     0x10
 ```
 
 PTE 辅助函数：
@@ -129,6 +128,8 @@ pte_pfn(pte);             /* 取 PFN */
 pfn_pte(pfn, flags);      /* 组 PTE */
 pte_present(pte);         /* present 位 */
 pte_write(pte);           /* write 位 */
+pte_read(pte);            /* read 位 */
+pte_exec(pte);            /* exec 位 */
 pte_mkwrite(pte);         /* 设置 write */
 pte_wrprotect(pte);       /* 清除 write */
 pte_modify(pte, flags);   /* 保留 PFN，改权限 */
@@ -192,67 +193,35 @@ MM_PROT_READ / MM_PROT_WRITE / MM_PROT_EXEC
 MM_ACCESS_READ / MM_ACCESS_WRITE / MM_ACCESS_EXEC
 ```
 
-## 已完成 / TODO
-
-### 已完成
+## 已完成
 
 - Linux 风格的 `pgd_t` / `pte_t`、`pgd_val()` / `pte_val()` 和编码辅助函数；
 - `mm_create()`：分配 PGD 页 + 4KB 页表存储；
 - `mm_destroy()`：遍历 PGD，释放所有 PTE 页和 PGD 页；
 - `mm_tlb_flush_count()` / `mm_page_table_pages()` / `mm_check()`；
-- `struct page.pgtable` 和 `struct mm_struct`。
+- `struct page.pgtable` 和 `struct mm_struct`；
+- `pgtable_walk(mm, vaddr, create)`：校验 mm/vaddr/对齐，按需分配 PTE 页；
+- `mm_map()`：校验 vaddr/page、`walk(create=true)`、重复映射 `-EEXIST`、写 PTE、flush；
+- `mm_unmap()`：非法参数 `-EINVAL`、未映射 `-ENOENT`、清 PTE、flush，不释放数据页；
+- `mm_protect()`：保留 PFN，改 read/write/exec 权限，flush；
+- `mm_translate()`：检查 present/read/write/exec 后 `pfn_to_page(pte_pfn(pte))`；
+- TLB flush 计数：`mm_map()` / `mm_unmap()` / `mm_protect()` 修改 PTE 后递增；
+- `mm_check()`：遍历 PGD，校验 `page_table_pages` 与 PGD/PTE 页数一致。
 
-### TODO
-
-1. `pgtable_walk(mm, vaddr, create)`
-   - 校验 mm/vaddr/对齐；
-   - `PGD_INDEX(vaddr)` 取 PGD entry；
-   - entry 不存在且 `create=false` → NULL；
-   - `create=true` → 从 pmm 分配 PTE 页，初始化 `pgtable` 存储；
-   - 返回 `&pte->entries[PTE_INDEX(vaddr)]`。
-
-2. `mm_map()`
-   - 校验 vaddr/page；
-   - `walk(create=true)`；
-   - 已存在 → `-EEXIST`；
-   - 写 PTE：`pfn_pte(page_to_pfn(page), flags)`；
-   - flush TLB。
-
-3. `mm_unmap()`
-   - `walk(create=false)`；
-   - 不存在 → `-ENOENT`；
-   - 清 PTE；
-   - flush TLB；
-   - 不释放数据页。
-
-4. `mm_protect()`
-   - 找到 PTE；
-   - 改 write 位，保留 PFN；
-   - flush TLB。
-
-5. `mm_translate()`
-   - `walk(create=false)`；
-   - 检查 present；
-   - 写访问检查 `PTE_WRITE`；
-   - `pfn_to_page(pte_pfn(pte))`。
-
-6. TLB flush 计数
-   - `mm_map()` / `mm_unmap()` / `mm_protect()` 修改 PTE 后增加 `tlb_flush_count`；
-   - 当前只做计数模拟，不实现真实 TLB 缓存。
-
-## 9 个脚手架测试
+## 10 个测试
 
 | 测试 | 目标 | 当前 |
 |---|---|---|
 | `create/destroy` | PGD 页从 pmm 来，销毁后归还 | ✅ PASS |
 | `pte encoding` | `pgd_t`/`pte_t` 编码和辅助函数 | ✅ PASS |
 | `unmapped translate` | 未映射返回 NULL | ✅ PASS |
-| `map/translate/unmap` | map 后 translate 返回同一个 page，unmap 后 NULL | ❌ TODO |
-| `page table pages` | 同一 PTE 页复用，不同 PGD 新建 PTE 页 | ❌ TODO |
-| `permission` | 只读页写访问失败，protect 后可写 | ❌ TODO |
-| `tlb flush count` | map/protect/unmap 都增加 flush 计数 | ❌ TODO |
-| `destroy releases tables` | 销毁 mm 后页表页无泄漏 | ❌ TODO |
-| `random map/unmap` | 1 万次随机映射，最终无泄漏 | ❌ TODO |
+| `map/translate/unmap` | map 后 translate 返回同一个 page，unmap 后 NULL | ✅ PASS |
+| `page table pages` | 同一 PTE 页复用，不同 PGD 新建 PTE 页 | ✅ PASS |
+| `permission` | 只读页写访问失败，protect 后可写/可执行 | ✅ PASS |
+| `tlb flush count` | map/protect/unmap 都增加 flush 计数 | ✅ PASS |
+| `destroy releases tables` | 销毁 mm 后页表页无泄漏 | ✅ PASS |
+| `random map/unmap` | 10 万次随机映射，最终无泄漏 | ✅ PASS |
+| `error paths` | map/unmap/protect 的非法参数与错误码 | ✅ PASS |
 
 当前预期：
 
@@ -260,17 +229,16 @@ MM_ACCESS_READ / MM_ACCESS_WRITE / MM_ACCESS_EXEC
 [PASS] create/destroy
 [PASS] pte encoding
 [PASS] unmapped translate
-[FAIL] map/translate/unmap
-[FAIL] page table pages
-[FAIL] permission
-[FAIL] tlb flush count
-[FAIL] destroy releases tables
-[FAIL] random map/unmap
-
-6 test(s) failed
+[PASS] map/translate/unmap
+[PASS] page table pages
+[PASS] permission
+[PASS] tlb flush count
+[PASS] destroy releases tables
+[PASS] random map/unmap
+[PASS] error paths
+---------------------------------
+all tests passed
 ```
-
-这是脚手架状态；实现 TODO 后应变成 9/9。
 
 ## 运行
 
@@ -278,10 +246,10 @@ MM_ACCESS_READ / MM_ACCESS_WRITE / MM_ACCESS_EXEC
 make test-m3
 ```
 
-M3 脚手架暂不加入 `test-all`，避免打断 M2 回归：
+M3 已加入 `test-all`：
 
 ```bash
-make test-all   # M2c + M2d + M2a + M2b
+make test-all   # M2c + M2d + M3 + M2a + M2b
 ```
 
 debug：
@@ -290,9 +258,9 @@ debug：
 make debug-m3
 ```
 
-## 实现建议
+## 实现顺序回顾
 
-先实现 `pgtable_walk()`，再按这个顺序做：
+实现时的顺序：
 
 ```text
 1. pgtable_walk(create=false)：只查 PGD，不分配
@@ -300,7 +268,7 @@ make debug-m3
 3. mm_map：写 PTE
 4. mm_translate：读 PTE，先不做权限
 5. mm_unmap：清 PTE
-6. 权限检查
+6. 权限检查（read/write/exec）
 7. TLB flush 计数
 8. random + 泄漏检查
 ```
@@ -342,7 +310,7 @@ Linux 还有：
 
 ## 主动注入 bug
 
-实现后逐个验证：
+实现时逐个验证（已全部覆盖）：
 
 1. **PTE 存 page 指针而不是 PFN** → `mm_translate` 结果错误/越界；
 2. **不分配中间 PTE 页** → NULL 解引用或 map 失败；
@@ -357,8 +325,6 @@ Linux 还有：
 
 ## 下一步
 
-M3 完成后：
+M3 已完成，报告见 [../reports/M3.md](../reports/M3.md)。
 
-1. 把 `test-m3` 加入 `test-all`；
-2. 更新 [../reports/M3.md](../reports/M3.md)；
-3. 进入 M4：VMA + 缺页。
+1. 进入 M4：VMA + 缺页。

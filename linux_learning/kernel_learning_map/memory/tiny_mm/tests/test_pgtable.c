@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -153,9 +154,11 @@ static int test_page_table_pages(void)
 	CHECK(mm_map(mm, 0x100000UL, pages[0], MM_PROT_READ) == 0);
 	CHECK(mm_map(mm, 0x101000UL, pages[1], MM_PROT_READ) == 0);
 	CHECK(mm_page_table_pages(mm) == 2);
+	CHECK(mm_check(mm) == 0);
 
 	CHECK(mm_map(mm, 0x200000UL, pages[0], MM_PROT_READ) == 0);
 	CHECK(mm_page_table_pages(mm) == 3);
+	CHECK(mm_check(mm) == 0);
 
 	mm_destroy(mm);
 	g_mm = NULL;
@@ -183,11 +186,19 @@ static int test_permission(void)
 	CHECK(mm_map(mm, vaddr, page, MM_PROT_READ) == 0);
 	CHECK(mm_translate(mm, vaddr, MM_ACCESS_READ) == page);
 	CHECK(mm_translate(mm, vaddr, MM_ACCESS_WRITE) == NULL);
+	CHECK(mm_translate(mm, vaddr, MM_ACCESS_EXEC) == NULL);
 
 	flushed = mm_tlb_flush_count(mm);
 	CHECK(mm_protect(mm, vaddr, MM_PROT_READ | MM_PROT_WRITE) == 0);
 	CHECK(mm_tlb_flush_count(mm) > flushed);
 	CHECK(mm_translate(mm, vaddr, MM_ACCESS_WRITE) == page);
+	CHECK(mm_translate(mm, vaddr, MM_ACCESS_EXEC) == NULL);
+
+	flushed = mm_tlb_flush_count(mm);
+	CHECK(mm_protect(mm, vaddr,
+			 MM_PROT_READ | MM_PROT_WRITE | MM_PROT_EXEC) == 0);
+	CHECK(mm_tlb_flush_count(mm) > flushed);
+	CHECK(mm_translate(mm, vaddr, MM_ACCESS_EXEC) == page);
 
 	mm_destroy(mm);
 	g_mm = NULL;
@@ -274,7 +285,7 @@ static int test_random_map_unmap(void)
 	CHECK(mm != NULL);
 
 	srand(0x3eed);
-	for (i = 0; i < 10000; i++) {
+	for (i = 0; i < 100000; i++) {
 		vaddr = 0x100000UL + ((unsigned long)rand() % 64) * PAGE_SIZE;
 		if (mm_translate(mm, vaddr, MM_ACCESS_READ)) {
 			CHECK(mm_unmap(mm, vaddr) == 0);
@@ -282,7 +293,57 @@ static int test_random_map_unmap(void)
 			CHECK(mm_map(mm, vaddr, page, MM_PROT_READ) == 0);
 		}
 	}
+	CHECK(mm_check(mm) == 0);
 	CHECK(pmm_check() == 0);
+
+	mm_destroy(mm);
+	g_mm = NULL;
+	CHECK(pmm_free_pages(page, 0) == 0);
+	CHECK(pmm_free_count() == TEST_NR_PAGES);
+	CHECK(pmm_check() == 0);
+	return 0;
+}
+
+static int test_error_paths(void)
+{
+	struct mm_struct *mm;
+	struct page *page;
+	unsigned long vaddr = 0x100000UL;
+
+	CHECK(pmm_init(TEST_START_PFN, TEST_NR_PAGES) == 0);
+	page = pmm_alloc_pages(0);
+	CHECK(page != NULL);
+	mm = mm_create();
+	g_mm = mm;
+	CHECK(mm != NULL);
+
+	/* mm_map：非法参数返回 -EINVAL。 */
+	CHECK(mm_map(NULL, vaddr, page, MM_PROT_READ) == -EINVAL);
+	CHECK(mm_map(mm, vaddr, NULL, MM_PROT_READ) == -EINVAL);
+	CHECK(mm_map(mm, 0x100001UL, page, MM_PROT_READ) == -EINVAL);
+	CHECK(mm_map(mm, VADDR_LIMIT, page, MM_PROT_READ) == -EINVAL);
+
+	/* 重复映射返回 -EEXIST，且不增加页表页。 */
+	CHECK(mm_map(mm, vaddr, page, MM_PROT_READ) == 0);
+	CHECK(mm_map(mm, vaddr, page, MM_PROT_READ) == -EEXIST);
+	CHECK(mm_page_table_pages(mm) == 2);
+	CHECK(mm_check(mm) == 0);
+
+	/* mm_unmap：非法参数 -EINVAL，未映射 -ENOENT。 */
+	CHECK(mm_unmap(NULL, vaddr) == -EINVAL);
+	CHECK(mm_unmap(mm, 0x100001UL) == -EINVAL);
+	CHECK(mm_unmap(mm, VADDR_LIMIT) == -EINVAL);
+	CHECK(mm_unmap(mm, 0x100000UL + PAGE_SIZE) == -ENOENT);
+
+	/* mm_protect：非法参数 -EINVAL，未映射 -ENOENT。 */
+	CHECK(mm_protect(NULL, vaddr, MM_PROT_READ) == -EINVAL);
+	CHECK(mm_protect(mm, 0x100001UL, MM_PROT_READ) == -EINVAL);
+	CHECK(mm_protect(mm, 0x100000UL + PAGE_SIZE, MM_PROT_READ) == -ENOENT);
+
+	/* 正常 unmap 后再次 unmap 返回 -ENOENT。 */
+	CHECK(mm_unmap(mm, vaddr) == 0);
+	CHECK(mm_unmap(mm, vaddr) == -ENOENT);
+	CHECK(mm_check(mm) == 0);
 
 	mm_destroy(mm);
 	g_mm = NULL;
@@ -308,6 +369,7 @@ int main(void)
 	failures += run_test("tlb flush count", test_tlb_flush_count);
 	failures += run_test("destroy releases tables", test_destroy_releases_page_tables);
 	failures += run_test("random map/unmap", test_random_map_unmap);
+	failures += run_test("error paths", test_error_paths);
 
 	printf("---------------------------------\n");
 	if (failures) {

@@ -22,8 +22,8 @@
  *   - 用 __pgd()/__pte() 构造；
  *   - 用 pfn_pgd()/pfn_pte() 编码 PFN + flags。
  *
- * 当前已完成：mm_create/mm_destroy、Linux 风格 pgd_t/pte_t 编码辅助函数。
- * TODO(M3)：pgtable_walk、mm_map/mm_unmap/mm_protect/mm_translate 和 TLB flush 计数。
+ * 当前已完成：mm_create/mm_destroy、pgtable_walk、mm_map/mm_unmap/mm_protect/
+ * mm_translate、TLB flush 计数，以及 Linux 风格 pgd_t/pte_t 编码辅助函数。
  */
 
 #define PTE_INDEX_BITS 9
@@ -43,6 +43,8 @@
 #define PTE_PRESENT (1UL << 0)
 #define PTE_WRITE   (1UL << 1)
 #define PTE_USER    (1UL << 2)
+#define PTE_READ    (1UL << 3)
+#define PTE_EXEC    (1UL << 4)
 
 /* 两级页表里，PGD entry 也只需要 present 位。 */
 #define PGD_PRESENT PTE_PRESENT
@@ -118,7 +120,7 @@ static inline pgd_t pfn_pgd(unsigned long pfn, unsigned long flags)
 
 /*
  * PTE entry：
- *   [ 数据页的 PFN ][ present ][ write ][ user ]
+ *   [ 数据页的 PFN ][ present ][ write ][ user ][ read ][ exec ]
  */
 static inline bool pte_none(pte_t pte)
 {
@@ -133,6 +135,16 @@ static inline bool pte_present(pte_t pte)
 static inline bool pte_write(pte_t pte)
 {
 	return (pte_val(pte) & PTE_WRITE) != 0;
+}
+
+static inline bool pte_read(pte_t pte)
+{
+	return (pte_val(pte) & PTE_READ) != 0;
+}
+
+static inline bool pte_exec(pte_t pte)
+{
+	return (pte_val(pte) & PTE_EXEC) != 0;
 }
 
 static inline bool pte_user(pte_t pte)
@@ -217,7 +229,6 @@ void mm_destroy(struct mm_struct *mm);
  *   -EEXIST: 该 vaddr 已经映射
  *   -ENOENT: 该 vaddr 没有映射
  *   -ENOMEM: 页表页分配失败
- *   -ENOSYS: M3 脚手架尚未实现
  *
  * mm_unmap() 只清除 PTE，不释放数据页；数据页由调用者管理。
  */
